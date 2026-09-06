@@ -36,6 +36,11 @@ interface TopHeaderProps {
   onSelectStaffFilter: (staff: string) => void;
   viewMode: 'giornaliero' | 'settimanale';
   onToggleViewMode: () => void;
+  onSelectViewMode?: (mode: 'giornaliero' | 'settimanale') => void;
+  selectedDay?: string;
+  onPrevDay?: () => void;
+  onNextDay?: () => void;
+  onSelectSection?: (section: SectionId) => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -47,6 +52,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onSelectStaffFilter,
   viewMode,
   onToggleViewMode,
+  onSelectViewMode,
+  selectedDay = 'MER 2',
+  onPrevDay,
+  onNextDay,
+  onSelectSection,
 }) => {
   const [timeStr, setTimeStr] = useState('01:24');
 
@@ -142,18 +152,47 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </button>
             <span className="font-semibold text-xs text-gray-700 uppercase tracking-wide">AGO</span>
             <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5 text-xs text-tw-blue font-semibold">
-              <span>LUN 31</span>
-              <span className="text-gray-400">→</span>
-              <span>DOM 06</span>
+              {viewMode === 'settimanale' ? (
+                <>
+                  <span>LUN 31</span>
+                  <span className="text-gray-400">→</span>
+                  <span>DOM 06</span>
+                </>
+              ) : (
+                <span>{selectedDay}</span>
+              )}
             </div>
             <div className="flex items-center gap-0.5 text-gray-500">
-              <button className="p-1 hover:bg-gray-100 rounded transition">
+              <button
+                onClick={onPrevDay}
+                className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
+                title={viewMode === 'giornaliero' ? 'Giorno precedente' : 'Settimana precedente'}
+              >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button className="p-1 hover:bg-gray-100 rounded transition">
+              <button
+                onClick={onNextDay}
+                className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
+                title={viewMode === 'giornaliero' ? 'Giorno successivo' : 'Settimana successiva'}
+              >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+          </div>
+        ) : currentSection === 'orari-aperture' || currentSection === 'orari-chiusure' ? (
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-gray-700" />
+            <button
+              onClick={() => onSelectSection?.('orari')}
+              className="font-bold text-xs uppercase tracking-wider text-tw-blue hover:underline cursor-pointer"
+              title="Torna a Orari Salone"
+            >
+              ORARI
+            </button>
+            <span className="text-gray-400 text-xs font-bold">→</span>
+            <h1 className="font-bold text-xs uppercase tracking-wider text-tw-text-main">
+              {currentSection === 'orari-aperture' ? 'APERTURE STRAORDINARIE' : 'CHIUSURE STRAORDINARIE'}
+            </h1>
           </div>
         ) : (
           <div className="flex items-center gap-2.5">
@@ -175,13 +214,26 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         {currentSection === 'agenda' && (
           <>
             {/* View Switcher Dropdown */}
-            <button
-              onClick={onToggleViewMode}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-md text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
-            >
-              <span>{viewMode === 'settimanale' ? 'Settimanale' : 'Giornaliero'}</span>
-              <span className="text-[10px] text-gray-400">⌄</span>
-            </button>
+            <div className="relative">
+              <select
+                value={viewMode}
+                onChange={(e) => {
+                  const mode = e.target.value as 'giornaliero' | 'settimanale';
+                  if (onSelectViewMode) {
+                    onSelectViewMode(mode);
+                  } else if (mode !== viewMode) {
+                    onToggleViewMode();
+                  }
+                }}
+                className="appearance-none bg-white border border-gray-200 rounded-md px-3 py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer"
+              >
+                <option value="settimanale">Settimanale</option>
+                <option value="giornaliero">Giornaliero</option>
+              </select>
+              <span className="absolute right-2 top-2 pointer-events-none text-[10px] text-gray-400">
+                ⌄
+              </span>
+            </div>
 
             {/* Staff Filter Dropdown */}
             <div className="relative">

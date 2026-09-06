@@ -22,7 +22,6 @@ import {
   LineChart,
   Star,
   UserCircle,
-  Laptop,
   ChevronDown,
 } from 'lucide-react';
 
@@ -45,6 +44,22 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
     fornitori: false,
     statistiche: false,
   });
+
+  React.useEffect(() => {
+    if (currentSection.startsWith('magazzino')) {
+      setOpenSubmenus((prev) => ({ ...prev, magazzino: true }));
+    } else if (currentSection.startsWith('orari')) {
+      setOpenSubmenus((prev) => ({ ...prev, orari: true }));
+    } else if (
+      currentSection.startsWith('fornitori') ||
+      currentSection === 'produttori' ||
+      currentSection === 'spedizioni'
+    ) {
+      setOpenSubmenus((prev) => ({ ...prev, fornitori: true }));
+    } else if (currentSection.startsWith('statistiche')) {
+      setOpenSubmenus((prev) => ({ ...prev, statistiche: true }));
+    }
+  }, [currentSection, isOpen]);
 
   const toggleSubmenu = (menuKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -232,19 +247,31 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
               <div className="pl-10 pr-2 py-1 flex flex-col gap-1 text-[11px] font-medium text-gray-600">
                 <button
                   onClick={() => handleNavigate('orari')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className={`text-left py-1.5 px-2 rounded transition ${
+                    currentSection === 'orari'
+                      ? 'bg-tw-blue-light text-tw-blue font-bold'
+                      : 'hover:bg-gray-100 hover:text-tw-blue'
+                  }`}
                 >
                   Orari Salone
                 </button>
                 <button
                   onClick={() => handleNavigate('orari-aperture')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className={`text-left py-1.5 px-2 rounded transition ${
+                    currentSection === 'orari-aperture'
+                      ? 'bg-tw-blue-light text-tw-blue font-bold'
+                      : 'hover:bg-gray-100 hover:text-tw-blue'
+                  }`}
                 >
                   Aperture Straordinarie
                 </button>
                 <button
                   onClick={() => handleNavigate('orari-chiusure')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className={`text-left py-1.5 px-2 rounded transition ${
+                    currentSection === 'orari-chiusure'
+                      ? 'bg-tw-blue-light text-tw-blue font-bold'
+                      : 'hover:bg-gray-100 hover:text-tw-blue'
+                  }`}
                 >
                   Chiusure Straordinarie
                 </button>
@@ -409,18 +436,6 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
           >
             <UserCircle className="w-4 h-4 text-gray-500" />
             <span>PROFILO</span>
-          </button>
-
-          {/* 17. DOWNLOAD DESKTOP APP */}
-          <button
-            onClick={() => alert('Download app desktop Windows / macOS')}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-gray-50 text-gray-500 transition mt-2 border-t border-gray-100 pt-3"
-          >
-            <div className="flex items-center gap-3.5">
-              <Laptop className="w-4 h-4 text-gray-400" />
-              <span className="text-[11px]">DOWNLOAD DESKTOP APP</span>
-            </div>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </button>
         </nav>
       </div>
