@@ -32,12 +32,25 @@ import { FornitoriView } from '@/components/modules/fornitori/FornitoriView';
 import { StatisticheView } from '@/components/modules/statistiche/StatisticheView';
 import { RecensioniView } from '@/components/modules/recensioni/RecensioniView';
 import { ProfiloView } from '@/components/modules/profilo/ProfiloView';
+import { AGENDA_DAYS, getTodayDayKey, getTodayIsoDate } from '@/lib/agendaDays';
 
 export default function Home() {
   const [activeVenueId, setActiveVenueId] = useState<string>(mockVenues[0].id);
   const [currentSection, setCurrentSection] = useState<SectionId>('agenda');
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'giornaliero' | 'settimanale'>('settimanale');
+  const [selectedDay, setSelectedDay] = useState<string>(getTodayDayKey());
+
+  const handleStepDay = (direction: 1 | -1) => {
+    setSelectedDay((prev) => {
+      const idx = AGENDA_DAYS.findIndex((d) => d.key === prev);
+      const nextIdx = Math.min(
+        AGENDA_DAYS.length - 1,
+        Math.max(0, (idx === -1 ? 0 : idx) + direction)
+      );
+      return AGENDA_DAYS[nextIdx].key;
+    });
+  };
 
   // Modals state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -72,7 +85,7 @@ export default function Home() {
       staffId: staff.id,
       staffInitials: staff.initials,
       staffName: staff.name,
-      date: '2026-09-02',
+      date: getTodayIsoDate(),
       dayOfWeek: day,
       startTime: time,
       durationFormatted: '1.00h',
@@ -153,6 +166,10 @@ export default function Home() {
           onToggleViewMode={() =>
             setViewMode((prev) => (prev === 'settimanale' ? 'giornaliero' : 'settimanale'))
           }
+          onSelectViewMode={setViewMode}
+          selectedDay={selectedDay}
+          onPrevDay={() => handleStepDay(-1)}
+          onNextDay={() => handleStepDay(1)}
         />
 
         {/* Dynamic Section View */}
@@ -165,6 +182,8 @@ export default function Home() {
               onSelectAppointment={handleSelectAppointment}
               onNewAppointmentAt={handleNewAppointmentAt}
               onUpdateAppointment={handleSaveAppointment}
+              viewMode={viewMode}
+              selectedDay={selectedDay}
             />
           )}
 

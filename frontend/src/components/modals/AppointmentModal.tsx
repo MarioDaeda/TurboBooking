@@ -17,6 +17,12 @@ import {
   Armchair,
 } from 'lucide-react';
 import { Appointment, ServiceItem, StaffMember } from '@/types';
+import { getTodayDayKey, getTodayIsoDate } from '@/lib/agendaDays';
+
+const formatDurationHours = (minutes: number): string =>
+  `${Math.floor(minutes / 60)}.${(minutes % 60).toString().padStart(2, '0')}h`;
+
+const DURATION_STEPS = Array.from({ length: 40 }, (_, i) => (i + 1) * 15);
 
 interface AppointmentModalProps {
   isOpen: boolean;
@@ -45,9 +51,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [hasPrivacyConsent, setHasPrivacyConsent] = useState(false);
   const [serviceId, setServiceId] = useState('');
   const [staffId, setStaffId] = useState('');
-  const [durationFormatted, setDurationFormatted] = useState('1.15h');
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [notes, setNotes] = useState('');
-  const [cleaningTime, setCleaningTime] = useState('0:00');
 
   useEffect(() => {
     if (appointment) {
@@ -57,7 +62,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setHasPrivacyConsent(appointment.hasPrivacyConsent);
       setServiceId(appointment.serviceId);
       setStaffId(appointment.staffId);
-      setDurationFormatted(appointment.durationFormatted);
+      setDurationMinutes(appointment.durationMinutes);
       setNotes(appointment.notes || '');
     } else {
       setClientName('Morena');
@@ -66,7 +71,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setHasPrivacyConsent(false);
       setServiceId(services[0]?.id || '');
       setStaffId(staffList[0]?.id || '');
-      setDurationFormatted('1.15h');
+      setDurationMinutes(services[0]?.durationMinutes || 60);
       setNotes('');
     }
   }, [appointment, services, staffList]);
@@ -97,11 +102,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       staffId: currentStaff?.id || 'staff-1',
       staffInitials: currentStaff?.initials || 'GI',
       staffName: currentStaff?.name || 'Gianluca',
-      date: appointment ? appointment.date : '2026-09-02',
-      dayOfWeek: appointment ? appointment.dayOfWeek : 'MER 2',
+      date: appointment ? appointment.date : getTodayIsoDate(),
+      dayOfWeek: appointment ? appointment.dayOfWeek : getTodayDayKey(),
       startTime: appointment ? appointment.startTime : '08:00',
-      durationFormatted,
-      durationMinutes: 75,
+      durationFormatted: formatDurationHours(durationMinutes),
+      durationMinutes,
       cleaningMinutes: 0,
       notes,
       feePercentage: 0,
@@ -135,7 +140,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             <X className="w-5 h-5" />
           </button>
           <div className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-            {appointment ? `${appointment.dayOfWeek} - ${appointment.startTime}` : 'MER 2 - 08:00'}
+            {appointment
+              ? `${appointment.dayOfWeek} - ${appointment.startTime}`
+              : `${getTodayDayKey()} - 08:00`}
           </div>
           <button
             onClick={handleSave}
@@ -237,13 +244,19 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
           {/* Service Section Card */}
           <div className="border border-gray-200 rounded-xl p-3.5 space-y-3 bg-white shadow-xs">
-            <div className="text-[11px] font-mono text-gray-400">08:00</div>
+            <div className="text-[11px] font-mono text-gray-400">
+              {appointment?.startTime || '08:00'}
+            </div>
 
             {/* Service & Duration Row */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <select
                 value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
+                onChange={(e) => {
+                  setServiceId(e.target.value);
+                  const srv = services.find((s) => s.id === e.target.value);
+                  if (srv?.durationMinutes) setDurationMinutes(srv.durationMinutes);
+                }}
                 className="font-bold text-xs text-gray-800 bg-transparent border-none focus:outline-none cursor-pointer flex-1"
               >
                 {services.map((srv) => (
@@ -254,16 +267,18 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               </select>
               <div className="flex items-center gap-1.5">
                 <select
-                  value={durationFormatted}
-                  onChange={(e) => setDurationFormatted(e.target.value)}
+                  value={durationMinutes}
+                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
                   className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5"
                 >
-                  <option value="0.15h">0.15h</option>
-                  <option value="0.30h">0.30h</option>
-                  <option value="1.00h">1.00h</option>
-                  <option value="1.15h">1.15h</option>
-                  <option value="1.45h">1.45h</option>
-                  <option value="2.45h">2.45h</option>
+                  {(DURATION_STEPS.includes(durationMinutes)
+                    ? DURATION_STEPS
+                    : [...DURATION_STEPS, durationMinutes].sort((a, b) => a - b)
+                  ).map((min) => (
+                    <option key={min} value={min}>
+                      {formatDurationHours(min)}
+                    </option>
+                  ))}
                 </select>
                 <span
                   className="w-5 h-5 rounded-full text-[9px] font-bold text-white flex items-center justify-center shadow-xs"
@@ -314,24 +329,6 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               <span>FEE 0%</span>
               <span>FONTE DIRECT</span>
             </div>
-          </div>
-
-          {/* Buffer Pulizia Row */}
-          <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl text-xs text-gray-700">
-            <span className="flex items-center gap-2">
-              <span>🧽</span>
-              <span>Tempo di pulizia</span>
-            </span>
-            <select
-              value={cleaningTime}
-              onChange={(e) => setCleaningTime(e.target.value)}
-              className="border border-gray-200 rounded-md px-2 py-0.5 text-xs bg-white"
-            >
-              <option value="0:00">0:00</option>
-              <option value="0:05">0:05</option>
-              <option value="0:10">0:10</option>
-              <option value="0:15">0:15</option>
-            </select>
           </div>
 
           {/* Bottom Action Buttons Bar */}

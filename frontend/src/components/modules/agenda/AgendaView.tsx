@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Appointment, StaffMember } from '@/types';
+import { AGENDA_DAYS, getTodayIndex } from '@/lib/agendaDays';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -10,6 +11,8 @@ interface AgendaViewProps {
   onSelectAppointment: (app: Appointment) => void;
   onNewAppointmentAt: (day: string, time: string, staffId: string) => void;
   onUpdateAppointment?: (app: Appointment) => void;
+  viewMode?: 'giornaliero' | 'settimanale';
+  selectedDay?: string;
 }
 
 interface ResizingState {
@@ -48,8 +51,11 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   onSelectAppointment,
   onNewAppointmentAt,
   onUpdateAppointment,
+  viewMode = 'settimanale',
+  selectedDay,
 }) => {
   const [resizingState, setResizingState] = useState<ResizingState | null>(null);
+  const justResizedRef = useRef(false);
 
   const handlePointerDownTop = (e: React.PointerEvent, app: Appointment) => {
     e.stopPropagation();
@@ -153,17 +159,23 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       onUpdateAppointment(updatedApp);
     }
 
+    // Il click sintetico che segue il pointerup arriva dopo il re-render:
+    // questo flag evita che venga interpretato come un click sull'appuntamento.
+    justResizedRef.current = true;
     setResizingState(null);
   };
-  const days = [
-    { key: 'LUN 31', name: 'LUN', date: '31', isClosed: true },
-    { key: 'MAR 1', name: 'MAR', date: '1', isClosed: false },
-    { key: 'MER 2', name: 'MER', date: '2', isClosed: false, isToday: true },
-    { key: 'GIO 3', name: 'GIO', date: '3', isClosed: false },
-    { key: 'VEN 4', name: 'VEN', date: '4', isClosed: false },
-    { key: 'SAB 5', name: 'SAB', date: '5', isClosed: false },
-    { key: 'DOM 6', name: 'DOM', date: '6', isClosed: true },
-  ];
+  const todayIndex = useMemo(() => getTodayIndex(), []);
+
+  const allDays = AGENDA_DAYS.map((day, idx) => ({
+    ...day,
+    isToday: idx === todayIndex,
+  }));
+
+  // In vista "giornaliero" mostriamo solo il giorno selezionato, non l'intera settimana.
+  const days =
+    viewMode === 'giornaliero'
+      ? allDays.filter((d) => d.key === (selectedDay ?? allDays[todayIndex].key))
+      : allDays;
 
   const timeSlots = [
     '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
@@ -186,7 +198,10 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         <div className="w-16 border-r border-gray-200 flex-shrink-0" />
 
         {/* Days Columns Header */}
-        <div className="flex-1 grid grid-cols-7 divide-x divide-gray-200">
+        <div
+          className="flex-1 grid divide-x divide-gray-200"
+          style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
+        >
           {days.map((day) => (
             <div
               key={day.key}
@@ -228,7 +243,10 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           </div>
 
           {/* Days Grid Columns */}
-          <div className="flex-1 grid grid-cols-7 divide-x divide-gray-200">
+          <div
+            className="flex-1 grid divide-x divide-gray-200"
+            style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
+          >
             {days.map((day) => (
               <div
                 key={day.key}
@@ -299,8 +317,11 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                           <div
                             key={app.id}
                             onClick={(e) => {
-                              if (resizingState) return;
                               e.stopPropagation();
+                              if (resizingState || justResizedRef.current) {
+                                justResizedRef.current = false;
+                                return;
+                              }
                               onSelectAppointment(app);
                             }}
                             style={{
