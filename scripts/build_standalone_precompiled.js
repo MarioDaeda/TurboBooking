@@ -1032,8 +1032,9 @@ async function main() {
                                 style={{
                                   top: topPixels + 'px',
                                   height: heightPixels + 'px',
+                                  backgroundColor: app.serviceColor || '#1B6478',
                                 }}
-                                className={'group absolute inset-x-1 rounded-lg p-2 bg-tw-appointment text-white text-xs shadow-md border-l-4 border-white/80 flex flex-col justify-between select-none touch-none transition-shadow ' +
+                                className={'group absolute inset-x-1 rounded-lg p-2 text-white text-xs shadow-md border-l-4 border-white/80 flex flex-col justify-between select-none touch-none transition-shadow ' +
                                   (isBeingDragged
                                     ? 'ring-4 ring-tw-blue shadow-2xl z-50 brightness-110 scale-[1.02] cursor-grabbing opacity-95'
                                     : isBeingResized
@@ -1074,13 +1075,16 @@ async function main() {
                                 )}
 
                                 {/* Appointment Content */}
-                                <div className="font-semibold leading-tight truncate pointer-events-none mt-0.5 flex items-center justify-between">
-                                  <span className="truncate">{app.clientName}</span>
+                                <div className="font-bold leading-tight truncate pointer-events-none mt-0.5 flex items-center justify-between">
+                                  <span className="truncate uppercase text-[11px] tracking-tight">{app.clientName}</span>
                                   <Icons.Move className="w-3 h-3 text-white/50 opacity-0 group-hover:opacity-100 transition shrink-0 ml-1" />
                                 </div>
-                                <div className="text-[10px] text-white/90 truncate flex items-center justify-between pointer-events-none mb-0.5">
-                                  <span className="truncate">{app.serviceName}</span>
-                                  <span className="font-mono text-[9px] shrink-0 ml-1">{effectiveDurationFormatted}</span>
+                                <div className="text-[10px] text-white/95 font-medium truncate flex items-center justify-between pointer-events-none mb-0.5">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0 inline-block shadow-xs" />
+                                    <span className="truncate uppercase">{app.serviceName}</span>
+                                  </div>
+                                  <span className="font-mono text-[9px] font-semibold shrink-0 ml-1 text-white/90">{effectiveDurationFormatted}</span>
                                 </div>
 
                                 {/* Bottom Resize Handle */}
