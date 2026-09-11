@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'TurboBooking — Gestionale Salone',
   description: 'Gestionale per saloni di bellezza e barbieri, replica pixel-accurate di Treatwell Pro',
+  other: {
+    'darkreader-lock': '',
+  },
 };
 
 export default function RootLayout({
@@ -23,8 +26,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="it">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="it" suppressHydrationWarning>
+      <head>
+        <meta name="darkreader-lock" />
+      </head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
