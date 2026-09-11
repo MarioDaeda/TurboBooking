@@ -71,6 +71,10 @@ export default function Home() {
 
   const handleNewAppointmentAt = (day: string, time: string, staffId: string) => {
     const staff = mockStaff.find((s) => s.id === staffId) || mockStaff[0];
+    const defaultSrv =
+      mockServices.find((s) => s.id === 'srv-5') ||
+      mockServices.find((s) => s.name.toLowerCase().includes('taglio uomo top stylist')) ||
+      mockServices[0];
     const newApp: Appointment = {
       id: `app-${Date.now()}`,
       clientId: `cli-${Date.now()}`,
@@ -78,18 +82,18 @@ export default function Home() {
       clientPhone: '',
       clientEmail: '',
       hasPrivacyConsent: false,
-      serviceId: mockServices[0].id,
-      serviceName: mockServices[0].name,
-      serviceShortname: mockServices[0].shortname,
-      serviceColor: mockServices[0].categoryColor,
+      serviceId: defaultSrv.id,
+      serviceName: defaultSrv.name,
+      serviceShortname: defaultSrv.shortname,
+      serviceColor: defaultSrv.categoryColor,
       staffId: staff.id,
       staffInitials: staff.initials,
       staffName: staff.name,
       date: getTodayIsoDate(),
       dayOfWeek: day,
       startTime: time,
-      durationFormatted: '1.00h',
-      durationMinutes: 60,
+      durationFormatted: `${Math.floor(defaultSrv.durationMinutes / 60)}.${(defaultSrv.durationMinutes % 60).toString().padStart(2, '0')}h`,
+      durationMinutes: defaultSrv.durationMinutes,
       cleaningMinutes: 0,
       feePercentage: 0,
       source: 'DIRECT',

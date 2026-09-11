@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
+import { Move } from 'lucide-react';
 import { Appointment, StaffMember } from '@/types';
 import { AGENDA_DAYS, getTodayIndex } from '@/lib/agendaDays';
 
@@ -26,6 +27,21 @@ interface ResizingState {
   currentDurationFormatted: string;
 }
 
+interface DraggingState {
+  appId: string;
+  initialX: number;
+  initialY: number;
+  hasMoved: boolean;
+  initialStartMinutes: number;
+  durationMinutes: number;
+  durationFormatted: string;
+  initialDayOfWeek: string;
+  initialStaffId: string;
+  currentStartTime: string;
+  currentDayOfWeek: string;
+  currentStaffId: string;
+}
+
 const toMinutes = (timeStr: string): number => {
   const [h, m] = timeStr.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
@@ -44,6 +60,14 @@ const formatDurationHours = (minutes: number): string => {
   return `${h}.${m.toString().padStart(2, '0')}h`;
 };
 
+const getIsoDateForDayKey = (dayKey: string): string => {
+  const found = AGENDA_DAYS.find((d) => d.key === dayKey);
+  if (!found) return '2026-09-02';
+  const dayNum = found.date.padStart(2, '0');
+  const month = found.date === '31' ? '08' : '09';
+  return `2026-${month}-${dayNum}`;
+};
+
 export const AgendaView: React.FC<AgendaViewProps> = ({
   appointments,
   staffList,
@@ -55,6 +79,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   selectedDay,
 }) => {
   const [resizingState, setResizingState] = useState<ResizingState | null>(null);
+  const [draggingState, setDraggingState] = useState<DraggingState | null>(null);
   const justResizedRef = useRef(false);
 
   const handlePointerDownTop = (e: React.PointerEvent, app: Appointment) => {
@@ -93,49 +118,122 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     });
   };
 
+  const handlePointerDownCard = (e: React.PointerEvent, app: Appointment) => {
+    if (e.button !== 0) return;
+    if (resizingState) return;
+
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    const startMinutes = toMinutes(app.startTime);
+    setDraggingState({
+      appId: app.id,
+      initialX: e.clientX,
+      initialY: e.clientY,
+      hasMoved: false,
+      initialStartMinutes: startMinutes,
+      durationMinutes: app.durationMinutes,
+      durationFormatted: app.durationFormatted,
+      initialDayOfWeek: app.dayOfWeek,
+      initialStaffId: app.staffId,
+      currentStartTime: app.startTime,
+      currentDayOfWeek: app.dayOfWeek,
+      currentStaffId: app.staffId,
+    });
+  };
+
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!resizingState) return;
+    if (resizingState) {
+      const deltaY = e.clientY - resizingState.initialY;
+      // 56px = 30 minutes -> rawDeltaMinutes = deltaY * (30 / 56)
+      // Snap to 15-minute intervals
+      const rawDeltaMinutes = deltaY * (30 / 56);
+      const snapMinutes = Math.round(rawDeltaMinutes / 15) * 15;
 
-    const deltaY = e.clientY - resizingState.initialY;
-    // 56px = 30 minutes -> rawDeltaMinutes = deltaY * (30 / 56)
-    // Snap to 15-minute intervals
-    const rawDeltaMinutes = deltaY * (30 / 56);
-    const snapMinutes = Math.round(rawDeltaMinutes / 15) * 15;
+      if (resizingState.edge === 'bottom') {
+        const newDuration = Math.max(15, resizingState.initialDurationMinutes + snapMinutes);
+        const maxDuration = 20 * 60 - resizingState.initialStartMinutes;
+        const clampedDuration = Math.min(newDuration, Math.max(15, maxDuration));
 
-    if (resizingState.edge === 'bottom') {
-      const newDuration = Math.max(15, resizingState.initialDurationMinutes + snapMinutes);
-      const maxDuration = 20 * 60 - resizingState.initialStartMinutes;
-      const clampedDuration = Math.min(newDuration, Math.max(15, maxDuration));
+        setResizingState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentDurationMinutes: clampedDuration,
+                currentDurationFormatted: formatDurationHours(clampedDuration),
+              }
+            : null
+        );
+      } else if (resizingState.edge === 'top') {
+        const originalEndMinutes =
+          resizingState.initialStartMinutes + resizingState.initialDurationMinutes;
 
-      setResizingState((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentDurationMinutes: clampedDuration,
-              currentDurationFormatted: formatDurationHours(clampedDuration),
-            }
-          : null
-      );
-    } else if (resizingState.edge === 'top') {
-      const originalEndMinutes =
-        resizingState.initialStartMinutes + resizingState.initialDurationMinutes;
+        let newStartMinutes = resizingState.initialStartMinutes + snapMinutes;
+        newStartMinutes = Math.max(7 * 60, newStartMinutes);
+        if (originalEndMinutes - newStartMinutes < 15) {
+          newStartMinutes = originalEndMinutes - 15;
+        }
 
-      let newStartMinutes = resizingState.initialStartMinutes + snapMinutes;
-      newStartMinutes = Math.max(7 * 60, newStartMinutes);
-      if (originalEndMinutes - newStartMinutes < 15) {
-        newStartMinutes = originalEndMinutes - 15;
+        const clampedDuration = originalEndMinutes - newStartMinutes;
+        const newStartTimeStr = toTimeString(newStartMinutes);
+
+        setResizingState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentStartTime: newStartTimeStr,
+                currentDurationMinutes: clampedDuration,
+                currentDurationFormatted: formatDurationHours(clampedDuration),
+              }
+            : null
+        );
       }
+      return;
+    }
 
-      const clampedDuration = originalEndMinutes - newStartMinutes;
+    if (draggingState) {
+      const deltaX = Math.abs(e.clientX - draggingState.initialX);
+      const deltaY = Math.abs(e.clientY - draggingState.initialY);
+
+      // Threshold: at least 4 pixels to distinguish drag from a click
+      const hasMoved = draggingState.hasMoved || deltaX > 4 || deltaY > 4;
+
+      const rawDeltaMinutes = (e.clientY - draggingState.initialY) * (30 / 56);
+      const snapMinutes = Math.round(rawDeltaMinutes / 15) * 15;
+      const newStartMinutes = Math.max(
+        7 * 60,
+        Math.min(
+          20 * 60 - draggingState.durationMinutes,
+          draggingState.initialStartMinutes + snapMinutes
+        )
+      );
       const newStartTimeStr = toTimeString(newStartMinutes);
 
-      setResizingState((prev) =>
+      let targetDay = draggingState.currentDayOfWeek;
+      let targetStaffId = draggingState.currentStaffId;
+
+      if (typeof document !== 'undefined' && document.elementsFromPoint) {
+        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        for (const el of elements) {
+          const col = (el as HTMLElement).closest?.('[data-agenda-column="true"]') as HTMLElement | null;
+          if (col && col.dataset.day && col.dataset.staffId) {
+            const isClosed = col.dataset.isClosed === 'true';
+            if (!isClosed) {
+              targetDay = col.dataset.day;
+              targetStaffId = col.dataset.staffId;
+            }
+            break;
+          }
+        }
+      }
+
+      setDraggingState((prev) =>
         prev
           ? {
               ...prev,
+              hasMoved,
               currentStartTime: newStartTimeStr,
-              currentDurationMinutes: clampedDuration,
-              currentDurationFormatted: formatDurationHours(clampedDuration),
+              currentDayOfWeek: targetDay,
+              currentStaffId: targetStaffId,
             }
           : null
       );
@@ -143,26 +241,56 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!resizingState) return;
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {}
+    if (resizingState) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
 
-    const targetApp = appointments.find((a) => a.id === resizingState.appId);
-    if (targetApp && onUpdateAppointment) {
-      const updatedApp: Appointment = {
-        ...targetApp,
-        startTime: resizingState.currentStartTime,
-        durationMinutes: resizingState.currentDurationMinutes,
-        durationFormatted: resizingState.currentDurationFormatted,
-      };
-      onUpdateAppointment(updatedApp);
+      const targetApp = appointments.find((a) => a.id === resizingState.appId);
+      if (targetApp && onUpdateAppointment) {
+        const updatedApp: Appointment = {
+          ...targetApp,
+          startTime: resizingState.currentStartTime,
+          durationMinutes: resizingState.currentDurationMinutes,
+          durationFormatted: resizingState.currentDurationFormatted,
+        };
+        onUpdateAppointment(updatedApp);
+      }
+
+      justResizedRef.current = true;
+      setResizingState(null);
+      return;
     }
 
-    // Il click sintetico che segue il pointerup arriva dopo il re-render:
-    // questo flag evita che venga interpretato come un click sull'appuntamento.
-    justResizedRef.current = true;
-    setResizingState(null);
+    if (draggingState) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+
+      if (draggingState.hasMoved) {
+        const targetApp = appointments.find((a) => a.id === draggingState.appId);
+        if (targetApp && onUpdateAppointment) {
+          const targetStaff =
+            staffList.find((s) => s.id === draggingState.currentStaffId) ||
+            staffList.find((s) => s.id === targetApp.staffId) ||
+            staffList[0];
+
+          const updatedApp: Appointment = {
+            ...targetApp,
+            startTime: draggingState.currentStartTime,
+            dayOfWeek: draggingState.currentDayOfWeek,
+            date: getIsoDateForDayKey(draggingState.currentDayOfWeek),
+            staffId: targetStaff.id,
+            staffName: targetStaff.name,
+            staffInitials: targetStaff.initials,
+          };
+          onUpdateAppointment(updatedApp);
+        }
+        justResizedRef.current = true;
+      }
+
+      setDraggingState(null);
+    }
   };
   const todayIndex = useMemo(() => getTodayIndex(), []);
 
@@ -255,7 +383,14 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                 }`}
               >
                 {filteredStaff.map((staff) => (
-                  <div key={staff.id} className="flex-1 relative divide-y divide-gray-100 min-w-0">
+                  <div
+                    key={staff.id}
+                    data-agenda-column="true"
+                    data-day={day.key}
+                    data-staff-id={staff.id}
+                    data-is-closed={day.isClosed ? 'true' : 'false'}
+                    className="flex-1 relative divide-y divide-gray-100 min-w-0"
+                  >
                     {timeSlots.map((time) => {
                       const isClosedHour =
                         day.isClosed ||
@@ -286,17 +421,53 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       );
                     })}
 
+                    {/* Ghost card in original position while dragging */}
+                    {draggingState?.hasMoved &&
+                      draggingState.initialDayOfWeek === day.key &&
+                      draggingState.initialStaffId === staff.id && (
+                        (() => {
+                          const origStartTotal = draggingState.initialStartMinutes - 7 * 60;
+                          const origTop = (origStartTotal / 30) * 56;
+                          const origHeight = Math.max((draggingState.durationMinutes / 30) * 56 - 4, 28);
+                          return (
+                            <div
+                              style={{
+                                top: `${origTop}px`,
+                                height: `${origHeight}px`,
+                              }}
+                              className="absolute inset-x-1 rounded-lg p-2 border-2 border-dashed border-tw-blue/50 bg-blue-50/40 text-tw-blue text-xs flex flex-col justify-between pointer-events-none z-10"
+                            >
+                              <div className="font-bold text-[11px] truncate opacity-70">
+                                Spostamento in corso...
+                              </div>
+                              <div className="text-[10px] font-mono opacity-60">
+                                Origine: {toTimeString(draggingState.initialStartMinutes)}
+                              </div>
+                            </div>
+                          );
+                        })()
+                    )}
+
                     {/* Render Appointments positioned on grid */}
                     {appointments
-                      .filter(
-                        (app) =>
-                          app.dayOfWeek === day.key &&
-                          (app.staffId === staff.id || app.staffInitials === staff.initials)
-                      )
+                      .filter((app) => {
+                        const isThisAppDragged = draggingState?.appId === app.id;
+                        const effectiveDay = isThisAppDragged ? draggingState.currentDayOfWeek : app.dayOfWeek;
+                        const effectiveStaff = isThisAppDragged ? draggingState.currentStaffId : app.staffId;
+
+                        return (
+                          effectiveDay === day.key &&
+                          (effectiveStaff === staff.id || app.staffInitials === staff.initials)
+                        );
+                      })
                       .map((app) => {
                         const isBeingResized = resizingState?.appId === app.id;
+                        const isBeingDragged = draggingState?.appId === app.id && draggingState.hasMoved;
+
                         const effectiveStartTime = isBeingResized
                           ? resizingState.currentStartTime
+                          : isBeingDragged
+                          ? draggingState.currentStartTime
                           : app.startTime;
                         const effectiveDurationMinutes = isBeingResized
                           ? resizingState.currentDurationMinutes
@@ -316,9 +487,13 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                         return (
                           <div
                             key={app.id}
+                            onPointerDown={(e) => handlePointerDownCard(e, app)}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={handlePointerUp}
+                            onPointerCancel={handlePointerUp}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (resizingState || justResizedRef.current) {
+                              if (resizingState || draggingState?.hasMoved || justResizedRef.current) {
                                 justResizedRef.current = false;
                                 return;
                               }
@@ -328,11 +503,14 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               top: `${topPixels}px`,
                               height: `${heightPixels}px`,
                             }}
-                            className={`group absolute inset-x-1 z-10 rounded-lg p-2 bg-tw-appointment text-white text-xs shadow-md border-l-4 border-white/80 flex flex-col justify-between cursor-pointer transition-shadow select-none ${
-                              isBeingResized
-                                ? 'ring-2 ring-tw-blue shadow-xl z-30 brightness-105'
-                                : 'hover:brightness-95'
+                            className={`group absolute inset-x-1 rounded-lg p-2 bg-tw-appointment text-white text-xs shadow-md border-l-4 border-white/80 flex flex-col justify-between select-none touch-none transition-shadow ${
+                              isBeingDragged
+                                ? 'ring-4 ring-tw-blue shadow-2xl z-50 brightness-110 scale-[1.02] cursor-grabbing opacity-95'
+                                : isBeingResized
+                                ? 'ring-2 ring-tw-blue shadow-xl z-30 brightness-105 cursor-ns-resize'
+                                : 'cursor-grab hover:shadow-lg hover:brightness-95 z-20 active:cursor-grabbing'
                             }`}
+                            title="Trascina al centro per spostare, o clicca per i dettagli"
                           >
                             {/* Top Resize Handle (Google Calendar style) */}
                             <div
@@ -346,6 +524,17 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               <div className="w-8 h-1 rounded-full bg-white/40 group-hover/handle:bg-white group-active/handle:bg-white shadow-xs transition mt-0.5" />
                             </div>
 
+                            {/* Live Tooltip when dragging */}
+                            {isBeingDragged && (
+                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[11px] font-bold px-3.5 py-1 rounded-full shadow-2xl whitespace-nowrap z-50 pointer-events-none flex items-center gap-2 animate-in fade-in">
+                                <span className="text-blue-300 uppercase tracking-wide">{day.name} {day.date}</span>
+                                <span>•</span>
+                                <span>{effectiveStartTime} – {endTimeStr}</span>
+                                <span>•</span>
+                                <span className="text-amber-300 font-semibold">{staff.name}</span>
+                              </div>
+                            )}
+
                             {/* Live Tooltip when resizing */}
                             {isBeingResized && (
                               <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg whitespace-nowrap z-40 pointer-events-none flex items-center gap-1.5 animate-in fade-in">
@@ -355,12 +544,13 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                             )}
 
                             {/* Content */}
-                            <div className="font-semibold leading-tight truncate pointer-events-none mt-0.5">
-                              {app.clientName}
+                            <div className="font-semibold leading-tight truncate pointer-events-none mt-0.5 flex items-center justify-between">
+                              <span className="truncate">{app.clientName}</span>
+                              <Move className="w-3 h-3 text-white/50 opacity-0 group-hover:opacity-100 transition shrink-0 ml-1" />
                             </div>
                             <div className="text-[10px] text-white/90 truncate flex items-center justify-between pointer-events-none mb-0.5">
-                              <span>{app.serviceName}</span>
-                              <span className="font-mono text-[9px]">{effectiveDurationFormatted}</span>
+                              <span className="truncate">{app.serviceName}</span>
+                              <span className="font-mono text-[9px] shrink-0 ml-1">{effectiveDurationFormatted}</span>
                             </div>
 
                             {/* Bottom Resize Handle (Google Calendar style) */}

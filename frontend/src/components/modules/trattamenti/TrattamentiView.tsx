@@ -15,8 +15,14 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
 
   const selectedService = services.find((s) => s.id === selectedServiceId) || services[0];
 
+  const filteredServices = services.filter(
+    (srv) =>
+      srv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      srv.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const groupedServices: { [category: string]: ServiceItem[] } = {};
-  services.forEach((srv) => {
+  filteredServices.forEach((srv) => {
     if (!groupedServices[srv.category]) {
       groupedServices[srv.category] = [];
     }
@@ -110,7 +116,7 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
       {/* Main Treatment Details Panel */}
       <div className="flex-1 overflow-y-auto p-8 bg-tw-canvas">
         {selectedService ? (
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div key={selectedService.id} className="max-w-3xl mx-auto space-y-6">
             {/* Top Bar */}
             <div className="flex items-center justify-between">
               <button
@@ -221,10 +227,17 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
                   >
                     <option value="00:15">00:15</option>
                     <option value="00:30">00:30</option>
+                    <option value="00:45">00:45</option>
                     <option value="01:00">01:00</option>
                     <option value="01:15">01:15</option>
+                    <option value="01:30">01:30</option>
                     <option value="01:45">01:45</option>
+                    <option value="02:00">02:00</option>
+                    <option value="02:15">02:15</option>
+                    <option value="02:30">02:30</option>
                     <option value="02:45">02:45</option>
+                    <option value="03:00">03:00</option>
+                    <option value="03:30">03:30</option>
                   </select>
                 </div>
 
@@ -240,6 +253,7 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
                     <option value="0:15">0:15</option>
                     <option value="0:30">0:30</option>
                     <option value="0:45">0:45</option>
+                    <option value="1:00">1:00</option>
                   </select>
                 </div>
               </div>
