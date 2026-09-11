@@ -18,7 +18,6 @@ import {
   Search,
   ChevronDown,
   Calendar,
-  CheckCircle2,
   Scissors,
 } from 'lucide-react';
 import { Appointment, ServiceItem, StaffMember } from '@/types';
@@ -234,29 +233,6 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
         {/* Modal Form Body */}
         <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
-          {/* Privacy Alert Pill / Consent Toggle */}
-          <div className="flex justify-center">
-            {hasPrivacyConsent ? (
-              <button
-                type="button"
-                onClick={() => setHasPrivacyConsent(false)}
-                className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-4 py-1.5 rounded-full flex items-center gap-2 hover:bg-emerald-100 transition shadow-xs"
-              >
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Consenso privacy attivo (clicca per disattivare)
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setHasPrivacyConsent(true)}
-                className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-4 py-1.5 rounded-full shadow-xs transition"
-                title="Clicca per accordare il consenso"
-              >
-                Non ha dato i consensi per la privacy (clicca per attivare)
-              </button>
-            )}
-          </div>
-
           {/* Client Details Card */}
           <div className="bg-gray-50/70 rounded-2xl p-5 border border-gray-100 space-y-4">
             <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center justify-between">
@@ -663,30 +639,6 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 title="Elimina appuntamento"
               >
                 <Trash2 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  alert(
-                    '✂️ "Taglia": L\'appuntamento è stato memorizzato negli appunti. Clicca su un nuovo orario o data in agenda per incollarlo e spostarlo.'
-                  )
-                }
-                className="px-3.5 py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-200 transition"
-                title="Taglia e sposta in un altro orario"
-              >
-                Taglia
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  alert(
-                    '🔁 "Ripeti": Configura la frequenza dell\'appuntamento ricorrente (es. ogni 1, 2 o 4 settimane per clienti abituali).'
-                  )
-                }
-                className="px-3.5 py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-200 transition"
-                title="Imposta appuntamento ricorrente"
-              >
-                Ripeti
               </button>
               <button
                 type="button"

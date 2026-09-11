@@ -9,6 +9,7 @@ import {
 } from './conversationalTypes';
 import { MetaSender } from '../../integrations/meta/metaSender';
 import { GoHighLevelChannel } from '../../integrations/ghl/ghlNotificationChannel';
+import { ClaudeBookingAgent } from './claudeBookingAgent';
 
 // =============================================================================
 // TURBOBOOKING - CONVERSATIONAL AGENT ENGINE ("UNA SOLA LOGICA")
@@ -71,6 +72,23 @@ export const ConversationalAgentEngine = {
           externalId: event.senderId,
         });
       }
+    }
+
+    // WhatsApp: prenotazione in linguaggio naturale tramite Claude
+    if (event.channel === 'whatsapp' && event.senderPhoneE164 && ClaudeBookingAgent.isConfigured()) {
+      const replyText = await ClaudeBookingAgent.reply({
+        phone: event.senderPhoneE164,
+        senderName: event.senderName,
+        text: rawText,
+      });
+      await this.dispatchOutboundReply(event, replyText, customer);
+      return {
+        replyText,
+        intent: 'unknown',
+        customer,
+        escalatedToHuman: false,
+        requiresCustomerAction: true,
+      };
     }
 
     const sessionKey = `${event.channel}:${event.senderId}`;

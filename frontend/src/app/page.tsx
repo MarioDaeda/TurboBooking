@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SectionId, Appointment, Client } from '@/types';
 import {
   mockVenues,
@@ -63,6 +63,39 @@ export default function Home() {
   const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
   const [clients, setClients] = useState<Client[]>(mockClients);
   const [cassaSelectedClientId, setCassaSelectedClientId] = useState<string | null>(null);
+
+  // Sincronizza in agenda gli appuntamenti prenotati dai clienti via WhatsApp
+  useEffect(() => {
+    const syncWhatsAppBookings = async () => {
+      try {
+        const res = await fetch('/api/v1/bookings/whatsapp', { cache: 'no-store' });
+        if (!res.ok) return;
+        const { appointments: remote } = (await res.json()) as { appointments: Appointment[] };
+        setAppointments((prev) => {
+          const byId = new Map(prev.map((a) => [a.id, a]));
+          let changed = false;
+          for (const app of remote) {
+            const current = byId.get(app.id);
+            if (app.status === 'cancelled') {
+              if (current) {
+                byId.delete(app.id);
+                changed = true;
+              }
+            } else if (!current) {
+              byId.set(app.id, app);
+              changed = true;
+            }
+          }
+          return changed ? Array.from(byId.values()) : prev;
+        });
+      } catch {
+        // Server non raggiungibile: si riprova al prossimo ciclo
+      }
+    };
+    syncWhatsAppBookings();
+    const interval = setInterval(syncWhatsAppBookings, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSelectAppointment = (app: Appointment) => {
     setActiveAppointment(app);
