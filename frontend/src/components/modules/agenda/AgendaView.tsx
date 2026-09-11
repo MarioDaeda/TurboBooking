@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
-import { Move } from 'lucide-react';
-import { Appointment, StaffMember } from '@/types';
-import { AGENDA_DAYS, getTodayIndex } from '@/lib/agendaDays';
+import { Move, Clock } from 'lucide-react';
+import { Appointment, StaffMember, DaySchedule } from '@/types';
+import { AGENDA_DAYS, getTodayIndex, AgendaDay } from '@/lib/agendaDays';
+import { DayScheduleModal } from '@/components/modals/DayScheduleModal';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -14,6 +15,17 @@ interface AgendaViewProps {
   onUpdateAppointment?: (app: Appointment) => void;
   viewMode?: 'giornaliero' | 'settimanale';
   selectedDay?: string;
+  salonHours?: DaySchedule[];
+  dayOverrides?: { [dayKey: string]: { isOpen: boolean; openTime: string; closeTime: string } };
+  onSaveDaySchedule?: (params: {
+    dayKey: string;
+    dayName: string;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+    applyToAllMatchingDays: boolean;
+  }) => void;
+  onResetDayOverride?: (dayKey: string) => void;
 }
 
 interface ResizingState {
@@ -77,10 +89,21 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   onUpdateAppointment,
   viewMode = 'settimanale',
   selectedDay,
+  salonHours,
+  dayOverrides,
+  onSaveDaySchedule,
+  onResetDayOverride,
 }) => {
   const [resizingState, setResizingState] = useState<ResizingState | null>(null);
   const [draggingState, setDraggingState] = useState<DraggingState | null>(null);
+  const [selectedDayForSchedule, setSelectedDayForSchedule] = useState<AgendaDay | null>(null);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const justResizedRef = useRef(false);
+
+  const handleOpenDaySchedule = (day: AgendaDay) => {
+    setSelectedDayForSchedule(day);
+    setIsScheduleModalOpen(true);
+  };
 
   const handlePointerDownTop = (e: React.PointerEvent, app: Appointment) => {
     e.stopPropagation();
@@ -294,16 +317,41 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   };
   const todayIndex = useMemo(() => getTodayIndex(), []);
 
-  const allDays = AGENDA_DAYS.map((day, idx) => ({
-    ...day,
-    isToday: idx === todayIndex,
-  }));
+  const daysWithSchedule = useMemo(() => {
+    return AGENDA_DAYS.map((day, idx) => {
+      // 1. Check explicit override for this specific date (e.g. "MER 2" or "LUN 31")
+      const override = dayOverrides?.[day.key];
+
+      // 2. Look up standard schedule in salonHours (e.g. "MER" -> "Mercoledì")
+      const standard = salonHours?.find((s) => s.shortName === day.name);
+
+      const isOpen = override
+        ? override.isOpen
+        : standard
+        ? standard.isOpen
+        : !day.isClosed;
+
+      const openTime = override?.openTime || standard?.openTime || (day.name === 'SAB' ? '08:00' : '07:00');
+      const closeTime = override?.closeTime || standard?.closeTime || (day.name === 'SAB' ? '18:00' : '20:00');
+      const isOverridden = !!override;
+
+      return {
+        ...day,
+        isToday: idx === todayIndex,
+        isOpen,
+        isClosed: !isOpen,
+        openTime,
+        closeTime,
+        isOverridden,
+      };
+    });
+  }, [salonHours, dayOverrides, todayIndex]);
 
   // In vista "giornaliero" mostriamo solo il giorno selezionato, non l'intera settimana.
   const days =
     viewMode === 'giornaliero'
-      ? allDays.filter((d) => d.key === (selectedDay ?? allDays[todayIndex].key))
-      : allDays;
+      ? daysWithSchedule.filter((d) => d.key === (selectedDay ?? daysWithSchedule[todayIndex].key))
+      : daysWithSchedule;
 
   const timeSlots = [
     '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
@@ -333,16 +381,38 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           {days.map((day) => (
             <div
               key={day.key}
-              className={`flex flex-col text-center py-2 ${
-                day.isToday ? 'bg-blue-50/60' : day.isClosed ? 'bg-gray-100/60' : ''
+              onClick={() => handleOpenDaySchedule(day)}
+              title="Clicca per modificare orari o forzare apertura/chiusura per questo giorno"
+              className={`flex flex-col text-center py-2 transition cursor-pointer select-none group/day relative ${
+                day.isToday
+                  ? 'bg-blue-50/60 hover:bg-blue-100/70'
+                  : day.isClosed
+                  ? 'bg-gray-100/70 hover:bg-gray-200/70'
+                  : 'hover:bg-blue-50/50'
               }`}
             >
-              <div className="text-[11px] font-bold text-gray-700">
-                {day.name}{' '}
+              <div className="text-[11px] font-bold text-gray-700 flex items-center justify-center gap-1">
+                <span>{day.name}</span>
                 <span className={day.isToday ? 'text-tw-blue font-extrabold' : ''}>
                   {day.date}
                 </span>
+                <Clock className="w-3 h-3 text-gray-400 group-hover/day:text-tw-blue transition opacity-40 group-hover/day:opacity-100" />
               </div>
+
+              {/* Status or Overridden badge */}
+              {day.isClosed ? (
+                <div className="mt-0.5">
+                  <span className="bg-rose-100 text-rose-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                    CHIUSO
+                  </span>
+                </div>
+              ) : day.isOverridden ? (
+                <div className="mt-0.5">
+                  <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded-md font-mono">
+                    {day.openTime} - {day.closeTime}
+                  </span>
+                </div>
+              ) : null}
 
               {/* Sub-columns for Staff initials */}
               <div className="flex justify-around mt-1 pt-1 border-t border-gray-200/60 text-[10px] text-gray-500 font-semibold">
@@ -392,10 +462,12 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                     className="flex-1 relative divide-y divide-gray-100 min-w-0"
                   >
                     {timeSlots.map((time) => {
+                      const open = day.openTime || '07:00';
+                      const close = day.closeTime || '20:00';
                       const isClosedHour =
                         day.isClosed ||
-                        time < '07:30' ||
-                        time > '19:30';
+                        time < open ||
+                        time >= close;
 
                       return (
                         <div
@@ -403,6 +475,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                           onClick={() => {
                             if (!isClosedHour) {
                               onNewAppointmentAt(day.key, time, staff.id);
+                            } else if (day.isClosed) {
+                              handleOpenDaySchedule(day);
                             }
                           }}
                           className={`h-14 transition cursor-pointer relative group ${
@@ -574,6 +648,26 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Day Schedule Modal (direct click on day header) */}
+      <DayScheduleModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => {
+          setIsScheduleModalOpen(false);
+          setSelectedDayForSchedule(null);
+        }}
+        day={selectedDayForSchedule}
+        onSave={(params) => {
+          if (onSaveDaySchedule) {
+            onSaveDaySchedule(params);
+          }
+        }}
+        onResetOverride={(dayKey) => {
+          if (onResetDayOverride) {
+            onResetDayOverride(dayKey);
+          }
+        }}
+      />
     </div>
   );
 };

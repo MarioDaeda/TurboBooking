@@ -15,24 +15,38 @@ interface DaySchedule {
 interface OrariViewProps {
   subSection: 'orari' | 'aperture' | 'chiusure';
   onSelectSubSection?: (sub: 'orari' | 'aperture' | 'chiusure') => void;
+  salonHours?: DaySchedule[];
+  onUpdateSalonHours?: (hours: DaySchedule[]) => void;
 }
 
 export const OrariView: React.FC<OrariViewProps> = ({
   subSection,
   onSelectSubSection,
+  salonHours,
+  onUpdateSalonHours,
 }) => {
   const [activeTab, setActiveTab] = useState<'orari' | 'aperture' | 'chiusure'>(subSection);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(2); // Default to Mercoledì
 
-  const [salonHours, setSalonHours] = useState<DaySchedule[]>([
+  const [localSalonHours, setLocalSalonHours] = useState<DaySchedule[]>([
     { day: 'Domenica', shortName: 'DOM', hours: 'Chiuso', isOpen: false, openTime: '08:00', closeTime: '19:00' },
     { day: 'Lunedì', shortName: 'LUN', hours: 'Chiuso', isOpen: false, openTime: '08:00', closeTime: '19:00' },
     { day: 'Martedì', shortName: 'MAR', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
     { day: 'Mercoledì', shortName: 'MER', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
     { day: 'Giovedì', shortName: 'GIO', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
     { day: 'Venerdì', shortName: 'VEN', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
-    { day: 'Sabato', shortName: 'SAB', hours: '08:00 - 19:00', isOpen: true, openTime: '08:00', closeTime: '19:00' },
+    { day: 'Sabato', shortName: 'SAB', hours: '08:00 - 18:00', isOpen: true, openTime: '08:00', closeTime: '18:00' },
   ]);
+
+  const currentSalonHours = salonHours || localSalonHours;
+
+  const updateHours = (newHours: DaySchedule[]) => {
+    if (onUpdateSalonHours) {
+      onUpdateSalonHours(newHours);
+    } else {
+      setLocalSalonHours(newHours);
+    }
+  };
 
   const [extraOpenings, setExtraOpenings] = useState([
     { id: '1', date: '2026-12-20', title: 'Apertura Domenicale Natale', hours: '09:00 - 18:00' },
@@ -55,32 +69,28 @@ export const OrariView: React.FC<OrariViewProps> = ({
     }
   };
 
-  const selectedDay = salonHours[selectedDayIndex];
+  const selectedDay = currentSalonHours[selectedDayIndex];
 
   const handleToggleDay = (idx: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSalonHours((prev) => {
-      const updated = [...prev];
-      const target = { ...updated[idx] };
-      target.isOpen = !target.isOpen;
-      target.hours = target.isOpen ? `${target.openTime} - ${target.closeTime}` : 'Chiuso';
-      updated[idx] = target;
-      return updated;
-    });
+    const updated = [...currentSalonHours];
+    const target = { ...updated[idx] };
+    target.isOpen = !target.isOpen;
+    target.hours = target.isOpen ? `${target.openTime} - ${target.closeTime}` : 'Chiuso';
+    updated[idx] = target;
+    updateHours(updated);
   };
 
   const handleTimeChange = (type: 'open' | 'close', value: string) => {
-    setSalonHours((prev) => {
-      const updated = [...prev];
-      const target = { ...updated[selectedDayIndex] };
-      if (type === 'open') target.openTime = value;
-      else target.closeTime = value;
-      if (target.isOpen) {
-        target.hours = `${target.openTime} - ${target.closeTime}`;
-      }
-      updated[selectedDayIndex] = target;
-      return updated;
-    });
+    const updated = [...currentSalonHours];
+    const target = { ...updated[selectedDayIndex] };
+    if (type === 'open') target.openTime = value;
+    else target.closeTime = value;
+    if (target.isOpen) {
+      target.hours = `${target.openTime} - ${target.closeTime}`;
+    }
+    updated[selectedDayIndex] = target;
+    updateHours(updated);
   };
 
   return (
@@ -136,7 +146,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
               Giorni della settimana
             </div>
             <div className="divide-y divide-gray-100 flex-1 overflow-y-auto">
-              {salonHours.map((item, idx) => {
+              {currentSalonHours.map((item, idx) => {
                 const isSelected = selectedDayIndex === idx;
                 return (
                   <div

@@ -96,6 +96,16 @@ async function main() {
       { key: 'DOM 6', name: 'DOM', date: '6', isClosed: true },
     ];
 
+    const DEFAULT_SALON_HOURS = [
+      { day: 'Domenica', shortName: 'DOM', hours: 'Chiuso', isOpen: false, openTime: '08:00', closeTime: '19:00' },
+      { day: 'Lunedì', shortName: 'LUN', hours: 'Chiuso', isOpen: false, openTime: '08:00', closeTime: '19:00' },
+      { day: 'Martedì', shortName: 'MAR', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
+      { day: 'Mercoledì', shortName: 'MER', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
+      { day: 'Giovedì', shortName: 'GIO', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
+      { day: 'Venerdì', shortName: 'VEN', hours: '07:00 - 20:00', isOpen: true, openTime: '07:00', closeTime: '20:00' },
+      { day: 'Sabato', shortName: 'SAB', hours: '08:00 - 18:00', isOpen: true, openTime: '08:00', closeTime: '18:00' },
+    ];
+
     const TIME_SLOTS = [
       '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
       '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
@@ -173,6 +183,11 @@ async function main() {
       PlayCircle: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></>} />,
       Bell: (props) => <Icon {...props} path={<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>} />,
       MessageSquare: (props) => <Icon {...props} path={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>} />,
+      Sun: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></>} />,
+      Moon: (props) => <Icon {...props} path={<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>} />,
+      AlertTriangle: (props) => <Icon {...props} path={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>} />,
+      RotateCcw: (props) => <Icon {...props} path={<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></>} />,
+      Plus: (props) => <Icon {...props} path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />,
     };
 
     // --- MAIN APP COMPONENT ---
@@ -183,9 +198,58 @@ async function main() {
       const [appointments, setAppointments] = useState(RAW_APPOINTMENTS);
 
       const [activeVenueId, setActiveVenueId] = useState(RAW_VENUES[0].id);
+      const [currentSection, setCurrentSection] = useState('agenda');
       const [viewMode, setViewMode] = useState('settimanale');
       const [selectedDay, setSelectedDay] = useState('MER 2');
       const [selectedStaffFilter, setSelectedStaffFilter] = useState('all');
+
+      // Salon Hours and Day Overrides
+      const [salonHours, setSalonHours] = useState(DEFAULT_SALON_HOURS);
+      const [dayOverrides, setDayOverrides] = useState({});
+      const [isDayScheduleOpen, setIsDayScheduleOpen] = useState(false);
+      const [selectedScheduleDay, setSelectedScheduleDay] = useState(null);
+
+      const handleSaveDaySchedule = (params) => {
+        if (params.applyToAllMatchingDays) {
+          setSalonHours(prev => prev.map(item => {
+            if (item.shortName.toUpperCase() === params.dayName.toUpperCase() || item.day.toLowerCase() === params.dayName.toLowerCase()) {
+              return {
+                ...item,
+                isOpen: params.isOpen,
+                openTime: params.openTime,
+                closeTime: params.closeTime,
+                hours: params.isOpen ? (params.openTime + ' - ' + params.closeTime) : 'Chiuso',
+              };
+            }
+            return item;
+          }));
+          setDayOverrides(prev => {
+            const next = { ...prev };
+            delete next[params.dayKey];
+            return next;
+          });
+          showToast('Orario standard aggiornato per tutti i ' + params.dayName);
+        } else {
+          setDayOverrides(prev => ({
+            ...prev,
+            [params.dayKey]: {
+              isOpen: params.isOpen,
+              openTime: params.openTime,
+              closeTime: params.closeTime,
+            },
+          }));
+          showToast('Orario forzato impostato per ' + params.dayKey + ': ' + (params.isOpen ? (params.openTime + ' - ' + params.closeTime) : 'CHIUSO'));
+        }
+      };
+
+      const handleResetDayOverride = (dayKey) => {
+        setDayOverrides(prev => {
+          const next = { ...prev };
+          delete next[dayKey];
+          return next;
+        });
+        showToast('Orario standard ripristinato per ' + dayKey);
+      };
 
       // Modals state
       const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -309,39 +373,55 @@ async function main() {
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             {/* Top Header */}
             <header className="h-14 bg-white border-b border-tw-border flex items-center justify-between px-4 select-none z-20">
-              <div className="flex items-center gap-3">
-                <button className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition">
-                  <Icons.Calendar className="w-5 h-5 text-gray-700" />
-                </button>
-                <span className="font-semibold text-xs text-gray-700 uppercase tracking-wide">AGO</span>
-                <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-2.5 py-1 text-xs text-tw-blue font-semibold">
-                  {viewMode === 'settimanale' ? (
-                    <>
-                      <span>LUN 31</span>
-                      <span className="text-gray-400">→</span>
-                      <span>DOM 06</span>
-                    </>
-                  ) : (
-                    <span>{selectedDay}</span>
-                  )}
+              {currentSection === 'agenda' ? (
+                <div className="flex items-center gap-3">
+                  <button className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition">
+                    <Icons.Calendar className="w-5 h-5 text-gray-700" />
+                  </button>
+                  <span className="font-semibold text-xs text-gray-700 uppercase tracking-wide">AGO</span>
+                  <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-2.5 py-1 text-xs text-tw-blue font-semibold">
+                    {viewMode === 'settimanale' ? (
+                      <>
+                        <span>LUN 31</span>
+                        <span className="text-gray-400">→</span>
+                        <span>DOM 06</span>
+                      </>
+                    ) : (
+                      <span>{selectedDay}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-0.5 text-gray-500">
+                    <button
+                      onClick={() => handleStepDay(-1)}
+                      className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
+                      title={viewMode === 'giornaliero' ? 'Giorno precedente' : 'Settimana precedente'}
+                    >
+                      <Icons.ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleStepDay(1)}
+                      className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
+                      title={viewMode === 'giornaliero' ? 'Giorno successivo' : 'Settimana successiva'}
+                    >
+                      <Icons.ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-0.5 text-gray-500">
+              ) : (
+                <div className="flex items-center gap-3">
                   <button
-                    onClick={() => handleStepDay(-1)}
-                    className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
-                    title={viewMode === 'giornaliero' ? 'Giorno precedente' : 'Settimana precedente'}
+                    onClick={() => setCurrentSection('agenda')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition cursor-pointer"
                   >
                     <Icons.ChevronLeft className="w-4 h-4" />
+                    <span>Torna all'Agenda</span>
                   </button>
-                  <button
-                    onClick={() => handleStepDay(1)}
-                    className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
-                    title={viewMode === 'giornaliero' ? 'Giorno successivo' : 'Settimana successiva'}
-                  >
-                    <Icons.ChevronRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <Icons.Clock className="w-4 h-4 text-tw-blue" />
+                    <span className="font-bold text-xs sm:text-sm text-gray-800">Orari e Disponibilità Salone</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Digital Clock */}
               <div className="font-mono text-base font-semibold text-gray-500 tracking-tight">
@@ -350,83 +430,102 @@ async function main() {
 
               {/* Right: Controls & Actions */}
               <div className="flex items-center gap-3">
-                {/* View Switcher */}
-                <div className="relative">
-                  <select
-                    value={viewMode}
-                    onChange={(e) => setViewMode(e.target.value)}
-                    className="appearance-none bg-white border border-gray-200 rounded-md px-3 py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer"
-                  >
-                    <option value="settimanale">Settimanale</option>
-                    <option value="giornaliero">Giornaliero</option>
-                  </select>
-                  <span className="absolute right-2 top-2 pointer-events-none text-[10px] text-gray-400">⌄</span>
-                </div>
+                {currentSection === 'agenda' && (
+                  <>
+                    {/* View Switcher */}
+                    <div className="relative">
+                      <select
+                        value={viewMode}
+                        onChange={(e) => setViewMode(e.target.value)}
+                        className="appearance-none bg-white border border-gray-200 rounded-md px-3 py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer"
+                      >
+                        <option value="settimanale">Settimanale</option>
+                        <option value="giornaliero">Giornaliero</option>
+                      </select>
+                      <span className="absolute right-2 top-2 pointer-events-none text-[10px] text-gray-400">⌄</span>
+                    </div>
 
-                {/* Staff Filter */}
-                <div className="relative">
-                  <select
-                    value={selectedStaffFilter}
-                    onChange={(e) => setSelectedStaffFilter(e.target.value)}
-                    className="appearance-none bg-white border border-gray-200 rounded-md px-3 py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer"
-                  >
-                    <option value="all">Tutti i collaboratori</option>
-                    {staffList.map(st => (
-                      <option key={st.id} value={st.id}>{st.name}</option>
-                    ))}
-                  </select>
-                  <span className="absolute right-2 top-2 pointer-events-none text-[10px] text-gray-400">⌄</span>
-                </div>
+                    {/* Staff Filter */}
+                    <div className="relative">
+                      <select
+                        value={selectedStaffFilter}
+                        onChange={(e) => setSelectedStaffFilter(e.target.value)}
+                        className="appearance-none bg-white border border-gray-200 rounded-md px-3 py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer"
+                      >
+                        <option value="all">Tutti i collaboratori</option>
+                        {staffList.map(st => (
+                          <option key={st.id} value={st.id}>{st.name}</option>
+                        ))}
+                      </select>
+                      <span className="absolute right-2 top-2 pointer-events-none text-[10px] text-gray-400">⌄</span>
+                    </div>
 
-                {/* Header Action Buttons */}
-                <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
-                  <button
-                    onClick={() => setIsFlashPromoOpen(true)}
-                    title="Promo Flash"
-                    className="p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
-                  >
-                    <Icons.Zap className="w-4 h-4 text-amber-500" />
-                  </button>
+                    {/* Header Action Buttons */}
+                    <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
+                      <button
+                        onClick={() => setIsFlashPromoOpen(true)}
+                        title="Promo Flash"
+                        className="p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
+                      >
+                        <Icons.Zap className="w-4 h-4 text-amber-500" />
+                      </button>
 
-                  <button
-                    onClick={() => setIsDayOverviewOpen(true)}
-                    title="Panoramica del Giorno"
-                    className="p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
-                  >
-                    <Icons.ClipboardList className="w-4 h-4 text-tw-blue" />
-                  </button>
+                      <button
+                        onClick={() => setIsDayOverviewOpen(true)}
+                        title="Panoramica del Giorno"
+                        className="p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
+                      >
+                        <Icons.ClipboardList className="w-4 h-4 text-tw-blue" />
+                      </button>
 
-                  <button
-                    title="Conforme GDPR & Normativa Fiscale"
-                    className="p-2 hover:bg-gray-100 text-gray-500 rounded-md transition"
-                  >
-                    <Icons.ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  </button>
+                      <button
+                        title="Conforme GDPR & Normativa Fiscale"
+                        className="p-2 hover:bg-gray-100 text-gray-500 rounded-md transition"
+                      >
+                        <Icons.ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      </button>
+                    </div>
+                  </>
+                )}
 
-                  <button
-                    onClick={() => setIsDrawerOpen(true)}
-                    title="Apri Menu Principale"
-                    className="p-2 hover:bg-gray-100 text-gray-700 hover:text-tw-blue rounded-md transition ml-1"
-                  >
-                    <Icons.Menu className="w-5 h-5" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => setIsDrawerOpen(true)}
+                  title="Apri Menu Principale"
+                  className="p-2 hover:bg-gray-100 text-gray-700 hover:text-tw-blue rounded-md transition ml-1"
+                >
+                  <Icons.Menu className="w-5 h-5" />
+                </button>
               </div>
             </header>
 
-            {/* Agenda View with Drag & Drop */}
+            {/* Main Content Area: Agenda or Orari */}
             <main className="flex-1 overflow-hidden relative flex flex-col">
-              <AgendaGridView
-                appointments={appointments}
-                staffList={staffList}
-                selectedStaffFilter={selectedStaffFilter}
-                viewMode={viewMode}
-                selectedDay={selectedDay}
-                onSelectAppointment={handleSelectAppointment}
-                onNewAppointmentAt={handleNewAppointmentAt}
-                onUpdateAppointment={handleSaveAppointment}
-                showToast={showToast}
-              />
+              {currentSection === 'agenda' ? (
+                <AgendaGridView
+                  appointments={appointments}
+                  staffList={staffList}
+                  selectedStaffFilter={selectedStaffFilter}
+                  viewMode={viewMode}
+                  selectedDay={selectedDay}
+                  salonHours={salonHours}
+                  dayOverrides={dayOverrides}
+                  onOpenDaySchedule={(day) => {
+                    setSelectedScheduleDay(day);
+                    setIsDayScheduleOpen(true);
+                  }}
+                  onSelectAppointment={handleSelectAppointment}
+                  onNewAppointmentAt={handleNewAppointmentAt}
+                  onUpdateAppointment={handleSaveAppointment}
+                  showToast={showToast}
+                />
+              ) : (
+                <OrariStandaloneView
+                  salonHours={salonHours}
+                  onUpdateSalonHours={setSalonHours}
+                  onBack={() => setCurrentSection('agenda')}
+                  showToast={showToast}
+                />
+              )}
             </main>
           </div>
 
@@ -442,9 +541,23 @@ async function main() {
           <SlideDrawer
             isOpen={isDrawerOpen}
             onClose={() => setIsDrawerOpen(false)}
+            currentSection={currentSection}
+            onSelectSection={setCurrentSection}
             onOpenDayOverview={() => setIsDayOverviewOpen(true)}
             onOpenFlashPromo={() => setIsFlashPromoOpen(true)}
             showToast={showToast}
+          />
+
+          {/* Day Schedule Modal (Direct Day Override from Agenda) */}
+          <DayScheduleDialog
+            isOpen={isDayScheduleOpen}
+            onClose={() => {
+              setIsDayScheduleOpen(false);
+              setSelectedScheduleDay(null);
+            }}
+            day={selectedScheduleDay}
+            onSave={handleSaveDaySchedule}
+            onResetOverride={handleResetDayOverride}
           />
 
           {/* Day Overview Modal */}
@@ -492,6 +605,9 @@ async function main() {
       selectedStaffFilter,
       viewMode,
       selectedDay,
+      salonHours,
+      dayOverrides,
+      onOpenDaySchedule,
       onSelectAppointment,
       onNewAppointmentAt,
       onUpdateAppointment,
@@ -501,12 +617,39 @@ async function main() {
       const [draggingState, setDraggingState] = useState(null);
       const justResizedRef = useRef(false);
 
+      const daysWithSchedule = useMemo(() => {
+        return AGENDA_DAYS.map((day) => {
+          const override = dayOverrides && dayOverrides[day.key];
+          const standard = salonHours && salonHours.find(s => s.shortName === day.name);
+
+          const isOpen = override
+            ? override.isOpen
+            : standard
+            ? standard.isOpen
+            : !day.isClosed;
+
+          const openTime = override ? override.openTime : standard ? standard.openTime : (day.name === 'SAB' ? '08:00' : '07:00');
+          const closeTime = override ? override.closeTime : standard ? standard.closeTime : (day.name === 'SAB' ? '18:00' : '20:00');
+          const isOverridden = !!override;
+
+          return {
+            ...day,
+            isToday: day.key === 'MER 2',
+            isOpen,
+            isClosed: !isOpen,
+            openTime,
+            closeTime,
+            isOverridden,
+          };
+        });
+      }, [salonHours, dayOverrides]);
+
       const days = useMemo(() => {
         if (viewMode === 'giornaliero') {
-          return AGENDA_DAYS.filter(d => d.key === selectedDay);
+          return daysWithSchedule.filter(d => d.key === selectedDay);
         }
-        return AGENDA_DAYS;
-      }, [viewMode, selectedDay]);
+        return daysWithSchedule;
+      }, [viewMode, selectedDay, daysWithSchedule]);
 
       const filteredStaff = useMemo(() => {
         if (selectedStaffFilter === 'all') return staffList;
@@ -707,16 +850,39 @@ async function main() {
               {days.map(day => (
                 <div
                   key={day.key}
-                  className={'flex flex-col text-center py-2 ' +
-                    (day.isToday ? 'bg-blue-50/60' : day.isClosed ? 'bg-gray-100/60' : '')
+                  onClick={() => onOpenDaySchedule && onOpenDaySchedule(day)}
+                  title="Clicca per modificare orari o forzare apertura/chiusura per questo giorno"
+                  className={'flex flex-col text-center py-2 transition cursor-pointer select-none group/day relative ' +
+                    (day.isToday
+                      ? 'bg-blue-50/60 hover:bg-blue-100/70'
+                      : day.isClosed
+                      ? 'bg-gray-100/70 hover:bg-gray-200/70'
+                      : 'hover:bg-blue-50/50')
                   }
                 >
-                  <div className="text-[11px] font-bold text-gray-700">
-                    {day.name}{' '}
+                  <div className="text-[11px] font-bold text-gray-700 flex items-center justify-center gap-1">
+                    <span>{day.name}</span>
                     <span className={day.isToday ? 'text-tw-blue font-extrabold' : ''}>
                       {day.date}
                     </span>
+                    <Icons.Clock className="w-3 h-3 text-gray-400 group-hover/day:text-tw-blue transition opacity-40 group-hover/day:opacity-100" />
                   </div>
+
+                  {/* Status or Overridden badge */}
+                  {day.isClosed ? (
+                    <div className="mt-0.5">
+                      <span className="bg-rose-100 text-rose-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                        CHIUSO
+                      </span>
+                    </div>
+                  ) : day.isOverridden ? (
+                    <div className="mt-0.5">
+                      <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded-md font-mono">
+                        {day.openTime} - {day.closeTime}
+                      </span>
+                    </div>
+                  ) : null}
+
                   <div className="flex justify-around mt-1 pt-1 border-t border-gray-200/60 text-[10px] text-gray-500 font-semibold">
                     {filteredStaff.map(st => (
                       <span key={st.id}>{st.initials}</span>
@@ -763,24 +929,32 @@ async function main() {
                       >
                         {/* Time slots rows */}
                         {TIME_SLOTS.map(time => {
-                          const isClosedHour = day.isClosed || time < '07:30' || time > '19:30';
+                          const isClosedHour = day.isClosed || time < (day.openTime || '07:00') || time >= (day.closeTime || '20:00');
                           return (
                             <div
                               key={time}
                               onClick={() => {
-                                if (!isClosedHour) {
+                                if (isClosedHour) {
+                                  if (onOpenDaySchedule) onOpenDaySchedule(day);
+                                } else {
                                   onNewAppointmentAt(day.key, time, staff.id);
                                 }
                               }}
+                              title={isClosedHour ? 'Giorno o orario chiuso al pubblico. Clicca per modificare gli orari del salone.' : undefined}
                               className={'h-14 transition cursor-pointer relative group ' +
                                 (isClosedHour
-                                  ? 'bg-tw-hatch cursor-not-allowed opacity-90'
+                                  ? 'bg-tw-hatch cursor-pointer opacity-85 hover:opacity-100'
                                   : 'hover:bg-blue-50/40')
                               }
                             >
                               {!isClosedHour && (
                                 <div className="hidden group-hover:flex items-center justify-center h-full text-tw-blue font-bold text-xs opacity-40">
                                   +
+                                </div>
+                              )}
+                              {isClosedHour && (
+                                <div className="hidden group-hover:flex items-center justify-center h-full text-gray-400 font-semibold text-[10px]">
+                                  Chiuso
                                 </div>
                               )}
                             </div>
@@ -1506,6 +1680,671 @@ async function main() {
       );
     }
 
+    // --- DAY SCHEDULE MODAL (Direct day override from Agenda) ---
+    function DayScheduleDialog({
+      isOpen,
+      onClose,
+      day,
+      onSave,
+      onResetOverride,
+    }) {
+      const [isOpenDay, setIsOpenDay] = useState(true);
+      const [openTime, setOpenTime] = useState('07:00');
+      const [closeTime, setCloseTime] = useState('20:00');
+      const [applyToAllMatchingDays, setApplyToAllMatchingDays] = useState(false);
+
+      const TIME_OPTIONS = [
+        '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
+        '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+        '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
+        '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00',
+      ];
+
+      const fullDayNames = {
+        LUN: 'Lunedì',
+        MAR: 'Martedì',
+        MER: 'Mercoledì',
+        GIO: 'Giovedì',
+        VEN: 'Venerdì',
+        SAB: 'Sabato',
+        DOM: 'Domenica',
+      };
+
+      useEffect(() => {
+        if (day) {
+          setIsOpenDay(!day.isClosed);
+          setOpenTime(day.openTime || '07:00');
+          setCloseTime(day.closeTime || '20:00');
+          setApplyToAllMatchingDays(false);
+        }
+      }, [day, isOpen]);
+
+      if (!isOpen || !day) return null;
+
+      const fullDayName = fullDayNames[day.name] || day.name;
+
+      const handleApplyPreset = (open, close) => {
+        setIsOpenDay(true);
+        setOpenTime(open);
+        setCloseTime(close);
+      };
+
+      const handleSave = () => {
+        onSave({
+          dayKey: day.key,
+          dayName: day.name,
+          isOpen: isOpenDay,
+          openTime,
+          closeTime,
+          applyToAllMatchingDays,
+        });
+        onClose();
+      };
+
+      const handleReset = () => {
+        if (onResetOverride) {
+          onResetOverride(day.key);
+          onClose();
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-tw-blue rounded-xl text-xs font-bold uppercase tracking-wide">
+                  <Icons.Clock className="w-4 h-4" />
+                  <span>{day.key}</span>
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-800">
+                    Orari e Disponibilità
+                  </h2>
+                  <p className="text-[11px] text-gray-500">
+                    {fullDayName} {day.date} Settembre 2026
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={onClose}
+                className="p-1.5 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded-xl transition cursor-pointer"
+                title="Chiudi"
+              >
+                <Icons.X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[80vh]">
+              {/* Status Switcher: Aperto vs Chiuso */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Stato del Salone per {fullDayName} {day.date}
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsOpenDay(true)}
+                    className={'py-3 px-4 rounded-2xl border-2 flex items-center justify-center gap-2.5 transition font-bold text-sm cursor-pointer ' +
+                      (isOpenDay
+                        ? 'border-emerald-500 bg-emerald-50/50 text-emerald-700 shadow-xs'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50')
+                    }
+                  >
+                    <div className={'w-3 h-3 rounded-full ' + (isOpenDay ? 'bg-emerald-500' : 'bg-gray-300')} />
+                    <span>APERTO</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsOpenDay(false)}
+                    className={'py-3 px-4 rounded-2xl border-2 flex items-center justify-center gap-2.5 transition font-bold text-sm cursor-pointer ' +
+                      (!isOpenDay
+                        ? 'border-rose-500 bg-rose-50/50 text-rose-700 shadow-xs'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50')
+                    }
+                  >
+                    <div className={'w-3 h-3 rounded-full ' + (!isOpenDay ? 'bg-rose-500' : 'bg-gray-300')} />
+                    <span>CHIUSO</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* If Aperto: Opening & Closing Hours */}
+              {isOpenDay ? (
+                <div className="space-y-4 border border-gray-100 rounded-2xl p-4 bg-gray-50/50">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1.5">
+                        <Icons.Sun className="w-3.5 h-3.5 text-amber-500" />
+                        Orario Apertura
+                      </label>
+                      <select
+                        value={openTime}
+                        onChange={(e) => setOpenTime(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-mono font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-tw-blue/30 focus:border-tw-blue shadow-xs cursor-pointer"
+                      >
+                        {TIME_OPTIONS.filter((t) => t < closeTime).map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1.5">
+                        <Icons.Moon className="w-3.5 h-3.5 text-indigo-500" />
+                        Orario Chiusura
+                      </label>
+                      <select
+                        value={closeTime}
+                        onChange={(e) => setCloseTime(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-mono font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-tw-blue/30 focus:border-tw-blue shadow-xs cursor-pointer"
+                      >
+                        {TIME_OPTIONS.filter((t) => t > openTime).map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                      Scorciatoie Orari
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleApplyPreset('07:00', '20:00')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-gray-200 hover:border-tw-blue text-gray-700 hover:text-tw-blue transition cursor-pointer"
+                      >
+                        07:00 - 20:00
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyPreset('08:00', '19:00')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-gray-200 hover:border-tw-blue text-gray-700 hover:text-tw-blue transition cursor-pointer"
+                      >
+                        08:00 - 19:00
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyPreset('08:00', '13:00')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-gray-200 hover:border-tw-blue text-gray-700 hover:text-tw-blue transition cursor-pointer"
+                      >
+                        Solo Mattina (08-13)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyPreset('14:00', '20:00')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-gray-200 hover:border-tw-blue text-gray-700 hover:text-tw-blue transition cursor-pointer"
+                      >
+                        Pomeriggio (14-20)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800 text-xs">
+                  <Icons.AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-bold">Giorno di chiusura straordinaria</strong>
+                    <span>
+                      L'agenda mostrerà l'intera colonna di {fullDayName} {day.date} tratteggiata (grigia) e non sarà possibile inserire nuovi appuntamenti in questo giorno.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Scope Selector: Solo questo giorno vs Tutti i [Giorno] */}
+              <div className="border-t border-gray-100 pt-4 space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Ambito di applicazione
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:bg-gray-50 cursor-pointer transition">
+                    <input
+                      type="radio"
+                      name="scheduleScope"
+                      checked={!applyToAllMatchingDays}
+                      onChange={() => setApplyToAllMatchingDays(false)}
+                      className="w-4 h-4 text-tw-blue focus:ring-0"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-gray-800 block">
+                        Modifica forzata solo per {day.key} ({day.date} Settembre)
+                      </span>
+                      <span className="text-gray-500">
+                        Apertura o chiusura straordinaria limitata a questa data specifica.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:bg-gray-50 cursor-pointer transition">
+                    <input
+                      type="radio"
+                      name="scheduleScope"
+                      checked={applyToAllMatchingDays}
+                      onChange={() => setApplyToAllMatchingDays(true)}
+                      className="w-4 h-4 text-tw-blue focus:ring-0"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-gray-800 block">
+                        Aggiorna l'orario standard di tutti i {fullDayName}
+                      </span>
+                      <span className="text-gray-500">
+                        Modifica permanente nella tabella orari generali del salone.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/70 flex items-center justify-between">
+              <div>
+                {day.isOverridden && onResetOverride && (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="px-3.5 py-2 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 flex items-center gap-1.5 transition cursor-pointer"
+                    title="Ripristina l'orario ordinario per questo giorno"
+                  >
+                    <Icons.RotateCcw className="w-3.5 h-3.5" />
+                    <span>Ripristina Standard</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-200/70 rounded-xl transition cursor-pointer"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="px-5 py-2 text-xs font-bold bg-tw-blue hover:bg-tw-blue-hover text-white rounded-xl shadow-xs flex items-center gap-2 transition cursor-pointer"
+                >
+                  <Icons.Check className="w-4 h-4" />
+                  <span>Salva Orari Giorno</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- ORARI STANDALONE VIEW (Sincronizzato con l'Agenda) ---
+    function OrariStandaloneView({ salonHours, onUpdateSalonHours, onBack, showToast }) {
+      const [activeTab, setActiveTab] = useState('orari');
+      const [selectedDayIndex, setSelectedDayIndex] = useState(2); // Mercoledì
+      const [extraOpenings, setExtraOpenings] = useState([
+        { id: '1', date: '2026-12-20', title: 'Apertura Domenicale Natale', hours: '09:00 - 18:00' },
+      ]);
+      const [extraClosures, setExtraClosures] = useState([
+        { id: '1', date: '2026-08-15', title: 'Ferragosto', reason: 'Festa Nazionale' },
+        { id: '2', date: '2026-12-25', title: 'Natale', reason: 'Festività' },
+      ]);
+
+      const selectedDay = salonHours[selectedDayIndex];
+
+      const handleToggleDay = (idx, e) => {
+        if (e) e.stopPropagation();
+        const updated = salonHours.map((item, i) => {
+          if (i === idx) {
+            const nextOpen = !item.isOpen;
+            return {
+              ...item,
+              isOpen: nextOpen,
+              hours: nextOpen ? (item.openTime + ' - ' + item.closeTime) : 'Chiuso',
+            };
+          }
+          return item;
+        });
+        onUpdateSalonHours(updated);
+        showToast(salonHours[idx].day + (salonHours[idx].isOpen ? ' impostato come CHIUSO' : ' impostato come APERTO'));
+      };
+
+      const handleTimeChange = (type, value) => {
+        const updated = salonHours.map((item, i) => {
+          if (i === selectedDayIndex) {
+            const newOpen = type === 'open' ? value : item.openTime;
+            const newClose = type === 'close' ? value : item.closeTime;
+            return {
+              ...item,
+              openTime: newOpen,
+              closeTime: newClose,
+              hours: item.isOpen ? (newOpen + ' - ' + newClose) : 'Chiuso',
+            };
+          }
+          return item;
+        });
+        onUpdateSalonHours(updated);
+        showToast('Orario ' + selectedDay.day + ' aggiornato: ' + (type === 'open' ? value : selectedDay.openTime) + ' - ' + (type === 'close' ? value : selectedDay.closeTime));
+      };
+
+      return (
+        <div className="flex-1 flex flex-col h-full bg-white overflow-hidden select-none">
+          {/* Subnavigation Bar */}
+          <div className="bg-gray-50 border-b border-gray-200 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('orari')}
+                className={'px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ' +
+                  (activeTab === 'orari'
+                    ? 'bg-tw-blue text-white shadow-xs'
+                    : 'bg-white text-gray-600 hover:bg-gray-200/70 border border-gray-200')}
+              >
+                Orari Salone
+              </button>
+              <button
+                onClick={() => setActiveTab('aperture')}
+                className={'px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ' +
+                  (activeTab === 'aperture'
+                    ? 'bg-tw-blue text-white shadow-xs'
+                    : 'bg-white text-gray-600 hover:bg-gray-200/70 border border-gray-200')}
+              >
+                Aperture Straordinarie
+              </button>
+              <button
+                onClick={() => setActiveTab('chiusure')}
+                className={'px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ' +
+                  (activeTab === 'chiusure'
+                    ? 'bg-tw-blue text-white shadow-xs'
+                    : 'bg-white text-gray-600 hover:bg-gray-200/70 border border-gray-200')}
+              >
+                Chiusure Straordinarie
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-gray-400 font-medium hidden sm:inline">
+                {activeTab === 'orari' && "Sincronizzato in tempo reale con l'agenda"}
+                {activeTab === 'aperture' && (extraOpenings.length + ' aperture straordinarie')}
+                {activeTab === 'chiusure' && (extraClosures.length + ' chiusure straordinarie')}
+              </span>
+              <button
+                onClick={onBack}
+                className="px-3 py-1 bg-tw-blue hover:bg-tw-blue-hover text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+              >
+                <Icons.Calendar className="w-3.5 h-3.5" />
+                <span>Vedi in Agenda</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TAB 1: ORARI SALONE */}
+          {activeTab === 'orari' && (
+            <div className="flex-1 flex h-full overflow-hidden">
+              {/* Days List Sidebar */}
+              <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+                <div className="p-3.5 bg-gray-50/50 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  Giorni della settimana
+                </div>
+                <div className="divide-y divide-gray-100 flex-1 overflow-y-auto">
+                  {salonHours.map((item, idx) => {
+                    const isSelected = selectedDayIndex === idx;
+                    return (
+                      <div
+                        key={item.day}
+                        onClick={() => setSelectedDayIndex(idx)}
+                        className={'p-4 flex items-center justify-between cursor-pointer transition ' +
+                          (isSelected
+                            ? 'bg-blue-50/80 border-l-4 border-tw-blue'
+                            : 'hover:bg-gray-50 border-l-4 border-transparent')}
+                      >
+                        <div>
+                          <div className={'font-bold text-xs ' + (isSelected ? 'text-tw-blue' : 'text-gray-800')}>
+                            {item.day}
+                          </div>
+                          <div className="text-[11px] text-gray-400 font-mono mt-0.5">{item.hours}</div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleDay(idx, e)}
+                          className={'w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer ' +
+                            (item.isOpen ? 'bg-tw-blue justify-end' : 'bg-gray-300 justify-start')}
+                        >
+                          <span className="bg-white w-4 h-4 rounded-full shadow-md block transform transition-transform" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Day Config Panel */}
+              <div className="flex-1 p-8 overflow-y-auto bg-gray-50/30">
+                <div className="max-w-2xl bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+                    <div>
+                      <h2 className="text-xl font-black text-gray-900">{selectedDay.day}</h2>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Configura gli orari standard di apertura per questo giorno
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className={'text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ' +
+                        (selectedDay.isOpen ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700')}>
+                        {selectedDay.isOpen ? 'Aperto' : 'Chiuso'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleDay(selectedDayIndex, e)}
+                        className={'w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer ' +
+                          (selectedDay.isOpen ? 'bg-tw-blue justify-end' : 'bg-gray-300 justify-start')}
+                      >
+                        <span className="bg-white w-4 h-4 rounded-full shadow-md block transform transition-transform" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {selectedDay.isOpen ? (
+                    <div className="space-y-5">
+                      <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Icons.Clock className="w-5 h-5 text-tw-blue" />
+                          <div>
+                            <div className="text-xs font-bold text-gray-800">Orario Continuato</div>
+                            <div className="text-[11px] text-gray-500 font-mono">{selectedDay.openTime} - {selectedDay.closeTime}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-600 uppercase mb-1.5 flex items-center gap-1.5">
+                            <Icons.Sun className="w-3.5 h-3.5 text-amber-500" />
+                            Apertura
+                          </label>
+                          <select
+                            value={selectedDay.openTime}
+                            onChange={(e) => handleTimeChange('open', e.target.value)}
+                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-tw-blue/30 focus:border-tw-blue cursor-pointer"
+                          >
+                            {['06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00']
+                              .map(t => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-gray-600 uppercase mb-1.5 flex items-center gap-1.5">
+                            <Icons.Moon className="w-3.5 h-3.5 text-indigo-500" />
+                            Chiusura
+                          </label>
+                          <select
+                            value={selectedDay.closeTime}
+                            onChange={(e) => handleTimeChange('close', e.target.value)}
+                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-tw-blue/30 focus:border-tw-blue cursor-pointer"
+                          >
+                            {['13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00']
+                              .map(t => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex items-center gap-2 text-xs text-gray-500">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Le modifiche si applicano automaticamente alle colonne dell'Agenda</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-gray-50 border border-gray-200 rounded-2xl text-center space-y-2">
+                      <div className="w-10 h-10 mx-auto rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+                        <Icons.AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div className="font-bold text-sm text-gray-800">Giorno impostato come CHIUSO</div>
+                      <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                        In questo giorno il salone resterà chiuso. L'agenda mostrerà la colonna di {selectedDay.day} con sfondo tratteggiato e bloccherà le prenotazioni.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleDay(selectedDayIndex, e)}
+                        className="mt-3 px-4 py-2 bg-tw-blue text-white rounded-xl text-xs font-bold hover:bg-tw-blue-hover transition cursor-pointer"
+                      >
+                        Riapri {selectedDay.day}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: APERTURE STRAORDINARIE */}
+          {activeTab === 'aperture' && (
+            <div className="flex-1 p-8 overflow-y-auto">
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">Aperture Straordinarie</h3>
+                    <p className="text-xs text-gray-500">Date speciali in cui il salone effettua aperture non ordinarie</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const newOpening = {
+                        id: 'ext-' + Date.now(),
+                        date: '2026-12-27',
+                        title: 'Apertura Straordinaria Domenicale',
+                        hours: '09:00 - 19:00',
+                      };
+                      setExtraOpenings(prev => [...prev, newOpening]);
+                      showToast('Apertura straordinaria aggiunta!');
+                    }}
+                    className="px-4 py-2 bg-tw-blue hover:bg-tw-blue-hover text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    <Icons.Plus className="w-4 h-4" />
+                    <span>Aggiungi Apertura</span>
+                  </button>
+                </div>
+
+                <div className="divide-y divide-gray-100 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+                  {extraOpenings.map(op => (
+                    <div key={op.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-tw-blue flex items-center justify-center font-bold text-xs">
+                          <Icons.Calendar className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-gray-800">{op.title}</div>
+                          <div className="text-[11px] text-gray-400 font-mono mt-0.5">{op.date} • {op.hours}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setExtraOpenings(prev => prev.filter(x => x.id !== op.id));
+                          showToast('Apertura rimossa');
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition cursor-pointer"
+                        title="Elimina"
+                      >
+                        <Icons.Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: CHIUSURE STRAORDINARIE */}
+          {activeTab === 'chiusure' && (
+            <div className="flex-1 p-8 overflow-y-auto">
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">Chiusure Straordinarie e Festività</h3>
+                    <p className="text-xs text-gray-500">Giorni in cui il salone rimarrà chiuso oltre ai turni standard</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const newClosure = {
+                        id: 'cls-' + Date.now(),
+                        date: '2026-11-01',
+                        title: 'Tutti i Santi',
+                        reason: 'Festività Nazionale',
+                      };
+                      setExtraClosures(prev => [...prev, newClosure]);
+                      showToast('Chiusura straordinaria aggiunta!');
+                    }}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    <Icons.Plus className="w-4 h-4" />
+                    <span>Aggiungi Chiusura</span>
+                  </button>
+                </div>
+
+                <div className="divide-y divide-gray-100 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+                  {extraClosures.map(cl => (
+                    <div key={cl.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-xs">
+                          <Icons.AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-gray-800">{cl.title}</div>
+                          <div className="text-[11px] text-gray-400 font-mono mt-0.5">{cl.date} • {cl.reason}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setExtraClosures(prev => prev.filter(x => x.id !== cl.id));
+                          showToast('Chiusura rimossa');
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition cursor-pointer"
+                        title="Elimina"
+                      >
+                        <Icons.Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     // --- DAY OVERVIEW MODAL ---
     function DayOverviewDialog({ isOpen, onClose, appointments, onOpenFlashPromo }) {
       const [activeTab, setActiveTab] = useState('incassi');
@@ -1741,19 +2580,20 @@ async function main() {
     }
 
     // --- SLIDE DRAWER MENU ---
-    function SlideDrawer({ isOpen, onClose, onOpenDayOverview, onOpenFlashPromo, showToast }) {
+    function SlideDrawer({ isOpen, onClose, currentSection, onSelectSection, onOpenDayOverview, onOpenFlashPromo, showToast }) {
       if (!isOpen) return null;
 
       const menuItems = [
-        { label: 'AGENDA', icon: Icons.Calendar, active: true },
-        { label: 'CASSA', icon: Icons.CreditCard },
-        { label: 'RUBRICA', icon: Icons.BookUser },
-        { label: 'PROMOZIONI', icon: Icons.Tag },
-        { label: 'MASTERCLASS', icon: Icons.PlayCircle, badge: 'nuovo' },
-        { label: 'MAGAZZINO', icon: Icons.Package },
-        { label: 'STAFF', icon: Icons.Users },
-        { label: 'TRATTAMENTI', icon: Icons.Scissors },
-        { label: 'RECENSIONI', icon: Icons.Heart },
+        { id: 'agenda', label: 'AGENDA', icon: Icons.Calendar },
+        { id: 'orari', label: 'ORARI', icon: Icons.Clock },
+        { id: 'cassa', label: 'CASSA', icon: Icons.CreditCard },
+        { id: 'rubrica', label: 'RUBRICA', icon: Icons.BookUser },
+        { id: 'promozioni', label: 'PROMOZIONI', icon: Icons.Tag },
+        { id: 'masterclass', label: 'MASTERCLASS', icon: Icons.PlayCircle, badge: 'nuovo' },
+        { id: 'magazzino', label: 'MAGAZZINO', icon: Icons.Package },
+        { id: 'staff', label: 'STAFF', icon: Icons.Users },
+        { id: 'trattamenti', label: 'TRATTAMENTI', icon: Icons.Scissors },
+        { id: 'recensioni', label: 'RECENSIONI', icon: Icons.Heart },
       ];
 
       return (
@@ -1780,11 +2620,13 @@ async function main() {
             <nav className="flex-1 py-3 px-3 flex flex-col gap-1 text-xs font-semibold text-gray-700 uppercase tracking-wider">
               {menuItems.map(item => {
                 const ItemIcon = item.icon;
+                const isActive = currentSection === item.id;
                 return (
                   <button
-                    key={item.label}
+                    key={item.id}
                     onClick={() => {
-                      if (item.label === 'AGENDA') {
+                      if (item.id === 'agenda' || item.id === 'orari') {
+                        if (onSelectSection) onSelectSection(item.id);
                         onClose();
                       } else {
                         showToast('Modulo ' + item.label + ' disponibile nella versione completa');
@@ -1792,10 +2634,10 @@ async function main() {
                       }
                     }}
                     className={'w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition cursor-pointer ' +
-                      (item.active ? 'bg-tw-blue-light text-tw-blue font-bold' : 'hover:bg-gray-50')}
+                      (isActive ? 'bg-tw-blue-light text-tw-blue font-bold' : 'hover:bg-gray-50 text-gray-700')}
                   >
                     <div className="flex items-center gap-3.5">
-                      <ItemIcon className={'w-4 h-4 ' + (item.active ? 'text-tw-blue' : 'text-gray-500')} />
+                      <ItemIcon className={'w-4 h-4 ' + (isActive ? 'text-tw-blue' : 'text-gray-500')} />
                       <span>{item.label}</span>
                     </div>
                     {item.badge && (

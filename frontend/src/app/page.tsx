@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { SectionId, Appointment, Client } from '@/types';
+import { SectionId, Appointment, Client, DaySchedule } from '@/types';
 import {
   mockVenues,
   mockStaff,
@@ -32,7 +32,7 @@ import { FornitoriView } from '@/components/modules/fornitori/FornitoriView';
 import { StatisticheView } from '@/components/modules/statistiche/StatisticheView';
 import { RecensioniView } from '@/components/modules/recensioni/RecensioniView';
 import { ProfiloView } from '@/components/modules/profilo/ProfiloView';
-import { AGENDA_DAYS, getTodayDayKey, getTodayIsoDate } from '@/lib/agendaDays';
+import { AGENDA_DAYS, getTodayDayKey, getTodayIsoDate, defaultSalonHours } from '@/lib/agendaDays';
 
 export default function Home() {
   const [activeVenueId, setActiveVenueId] = useState<string>(mockVenues[0].id);
@@ -63,6 +63,65 @@ export default function Home() {
   const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
   const [clients, setClients] = useState<Client[]>(mockClients);
   const [cassaSelectedClientId, setCassaSelectedClientId] = useState<string | null>(null);
+
+  // Salon working hours & day overrides
+  const [salonHours, setSalonHours] = useState<DaySchedule[]>(defaultSalonHours);
+  const [dayOverrides, setDayOverrides] = useState<{
+    [dayKey: string]: { isOpen: boolean; openTime: string; closeTime: string };
+  }>({});
+
+  const handleSaveDaySchedule = (params: {
+    dayKey: string;
+    dayName: string;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+    applyToAllMatchingDays: boolean;
+  }) => {
+    if (params.applyToAllMatchingDays) {
+      setSalonHours((prev) =>
+        prev.map((item) => {
+          if (
+            item.shortName.toUpperCase() === params.dayName.toUpperCase() ||
+            item.day.toLowerCase() === params.dayName.toLowerCase()
+          ) {
+            return {
+              ...item,
+              isOpen: params.isOpen,
+              openTime: params.openTime,
+              closeTime: params.closeTime,
+              hours: params.isOpen ? `${params.openTime} - ${params.closeTime}` : 'Chiuso',
+            };
+          }
+          return item;
+        })
+      );
+      // Remove any one-off override for this dayKey if we updated the standard
+      setDayOverrides((prev) => {
+        const next = { ...prev };
+        delete next[params.dayKey];
+        return next;
+      });
+    } else {
+      // Save specific day override
+      setDayOverrides((prev) => ({
+        ...prev,
+        [params.dayKey]: {
+          isOpen: params.isOpen,
+          openTime: params.openTime,
+          closeTime: params.closeTime,
+        },
+      }));
+    }
+  };
+
+  const handleResetDayOverride = (dayKey: string) => {
+    setDayOverrides((prev) => {
+      const next = { ...prev };
+      delete next[dayKey];
+      return next;
+    });
+  };
 
   // Sincronizza in agenda gli appuntamenti prenotati dai clienti via WhatsApp
   useEffect(() => {
@@ -221,6 +280,10 @@ export default function Home() {
               onUpdateAppointment={handleSaveAppointment}
               viewMode={viewMode}
               selectedDay={selectedDay}
+              salonHours={salonHours}
+              dayOverrides={dayOverrides}
+              onSaveDaySchedule={handleSaveDaySchedule}
+              onResetDayOverride={handleResetDayOverride}
             />
           )}
 
@@ -251,9 +314,27 @@ export default function Home() {
 
           {currentSection === 'spese' && <SpeseView />}
 
-          {currentSection === 'orari' && <OrariView subSection="orari" />}
-          {currentSection === 'orari-aperture' && <OrariView subSection="aperture" />}
-          {currentSection === 'orari-chiusure' && <OrariView subSection="chiusure" />}
+          {currentSection === 'orari' && (
+            <OrariView
+              subSection="orari"
+              salonHours={salonHours}
+              onUpdateSalonHours={setSalonHours}
+            />
+          )}
+          {currentSection === 'orari-aperture' && (
+            <OrariView
+              subSection="aperture"
+              salonHours={salonHours}
+              onUpdateSalonHours={setSalonHours}
+            />
+          )}
+          {currentSection === 'orari-chiusure' && (
+            <OrariView
+              subSection="chiusure"
+              salonHours={salonHours}
+              onUpdateSalonHours={setSalonHours}
+            />
+          )}
 
           {currentSection === 'trattamenti' && <TrattamentiView services={mockServices} />}
 

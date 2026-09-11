@@ -159,3 +159,20 @@ export interface CorrispettivoRow {
   impFatture: number;
   numRicevute: number;
 }
+
+export interface DaySchedule {
+  day: string;
+  shortName: string;
+  hours: string;
+  isOpen: boolean;
+  openTime: string;
+  closeTime: string;
+}
+
+export interface DayOverride {
+  dayKey: string;
+  isOpen: boolean;
+  openTime: string;
+  closeTime: string;
+}
+
