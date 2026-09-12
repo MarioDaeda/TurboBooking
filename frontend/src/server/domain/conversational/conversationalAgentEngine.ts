@@ -51,6 +51,16 @@ export const ConversationalAgentEngine = {
           marketingConsent: false, // Il messaggio spontaneo apre la finestra di servizio ma NON dà consenso al marketing (§04.2)
         });
       }
+
+      // Sincronizzazione riferimento esterno
+      if (customer && event.senderId) {
+        await ExternalRefsRepository.upsertRef({
+          provider: event.provider === 'ghl' ? 'ghl' : 'meta',
+          entityType: 'customer',
+          entityId: customer.id,
+          externalId: event.senderId,
+        });
+      }
     } else {
       // Per canali social senza numero immediato (Instagram/Messenger ID)
       const ref = await ExternalRefsRepository.getByExternalId('meta', 'customer', event.senderId);
@@ -75,7 +85,7 @@ export const ConversationalAgentEngine = {
     }
 
     // WhatsApp via Meta: orchestrazione con Gemini e function-calling (§4.1.1)
-    if (event.provider === 'meta' && event.channel === 'whatsapp') {
+    if (event.provider === 'meta' && event.channel === 'whatsapp' && customer) {
       const { replyText, toolsCalled } = await GeminiBookingAgent.reply({
         customerId: customer.id,
         phone: event.senderPhoneE164 || event.senderId,
@@ -136,7 +146,7 @@ export const ConversationalAgentEngine = {
             session.lastHoldId = undefined; // Reset dello stato di hold
             result = {
               replyText: `Fantastico ${customer.first_name}! Il tuo appuntamento è confermato con successo per ${this.formatSpokenDate(
-                confirmation.appointment.starts_at
+                confirmation.appointment.start_at
               )}. Ti invieremo un promemoria via messaggio il giorno prima!`,
               intent: 'booking_confirm',
               customer,

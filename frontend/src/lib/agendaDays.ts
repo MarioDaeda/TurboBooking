@@ -4,6 +4,7 @@ export interface AgendaDay {
   key: string;
   name: string;
   date: string;
+  isoDate: string; // YYYY-MM-DD
   isClosed: boolean;
   isOpen?: boolean;
   openTime?: string;
@@ -21,20 +22,41 @@ export const defaultSalonHours: DaySchedule[] = [
   { day: 'Sabato', shortName: 'SAB', hours: '08:00 - 18:00', isOpen: true, openTime: '08:00', closeTime: '18:00' },
 ];
 
-// I dati mock associano gli appuntamenti a queste date fisse (LUN 31 .. DOM 6):
-// manteniamo questi numeri per non rompere l'associazione con gli appuntamenti demo.
-const MOCK_DAY_NUMBERS = ['31', '1', '2', '3', '4', '5', '6'];
-const DAY_NAMES = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
+export const DAY_NAMES = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 
-export const AGENDA_DAYS: AgendaDay[] = DAY_NAMES.map((name, idx) => ({
-  key: `${name} ${MOCK_DAY_NUMBERS[idx]}`,
-  name,
-  date: MOCK_DAY_NUMBERS[idx],
-  isClosed: idx === 0 || idx === 6,
-  isOpen: idx !== 0 && idx !== 6,
-  openTime: idx === 5 ? '08:00' : '07:00',
-  closeTime: idx === 5 ? '18:00' : '20:00',
-}));
+/**
+ * Calcola i 7 giorni (da Lunedì a Domenica) della settimana contenente la data specificata.
+ */
+export function getWeekDays(anchorDate: Date = new Date()): AgendaDay[] {
+  const dayOfWeek = anchorDate.getDay(); // 0 = Dom, 1 = Lun, ...
+  const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(anchorDate);
+  monday.setDate(anchorDate.getDate() + distanceToMonday);
+
+  return DAY_NAMES.map((name, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const dayNum = String(d.getDate()).padStart(2, '0');
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const isoDate = `${year}-${monthNum}-${dayNum}`;
+    const key = `${name} ${dayNum}`;
+
+    return {
+      key,
+      name,
+      date: dayNum,
+      isoDate,
+      isClosed: idx === 0 || idx === 6, // Lunedì e Domenica chiusi di default
+      isOpen: idx !== 0 && idx !== 6,
+      openTime: idx === 5 ? '08:00' : '07:00',
+      closeTime: idx === 5 ? '18:00' : '20:00',
+    };
+  });
+}
+
+// Settimana corrente calcolata dinamicamente
+export const AGENDA_DAYS: AgendaDay[] = getWeekDays(new Date());
 
 export function getTodayIndex(): number {
   const jsDay = new Date().getDay(); // 0 = Domenica, 1 = Lunedì, ...
@@ -42,7 +64,8 @@ export function getTodayIndex(): number {
 }
 
 export function getTodayDayKey(): string {
-  return AGENDA_DAYS[getTodayIndex()].key;
+  const days = getWeekDays(new Date());
+  return days[getTodayIndex()].key;
 }
 
 export function getTodayIsoDate(): string {

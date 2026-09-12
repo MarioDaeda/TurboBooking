@@ -1,18 +1,32 @@
-import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/server/db/supabaseClient';
+import { apiError } from '@/server/http/api';
+import { verifyStaffAuthorization } from '@/server/auth/staffAuth';
+import { NextRequest, NextResponse } from 'next/server';
+import {
+  getSupabaseAdminClient,
+  InboundWebhookRow,
+  NotificationMessageRow,
+} from '@/server/db/supabaseClient';
 import { InboundWebhookRepository, NotificationRepository } from '@/server/db/repositories';
 
 // =============================================================================
 // TURBOBOOKING - INTEGRATIONS STATUS & HEALTH CHECK (§04.7 regola 5)
-// "Ogni provider ha una pagina di stato in-app. Un'integrazione silenziosamente
-// rotta è peggio di un'integrazione assente."
 // =============================================================================
 
-export async function GET() {
-  const supabase = getSupabaseAdminClient();
-  const isSupabaseConfigured = Boolean(
-    process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('your-project-id')
-  );
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
+  let isSupabaseConnected = false;
+  let supabaseDetails = '';
+
+  try {
+    const auth = await verifyStaffAuthorization(request);
+    if (!auth.authorized) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const supabase = getSupabaseAdminClient();
+    isSupabaseConnected = Boolean(supabase);
+    supabaseDetails = 'Connesso a Supabase PostgreSQL 16 con client server-only';
+  } catch (err: unknown) {
+    return apiError(err);
+  }
 
   const isGhlConfigured = Boolean(
     process.env.GHL_CLIENT_ID && !process.env.GHL_CLIENT_ID.includes('your-')
@@ -22,19 +36,25 @@ export async function GET() {
     process.env.META_VERIFY_TOKEN && !process.env.META_VERIFY_TOKEN.includes('your-')
   );
 
-  const recentWebhooks = await InboundWebhookRepository.listRecent(10);
-  const recentNotifications = await NotificationRepository.listRecent(10);
+  let recentWebhooks: InboundWebhookRow[] = [];
+  let recentNotifications: NotificationMessageRow[] = [];
+  if (isSupabaseConnected) {
+    try {
+      recentWebhooks = await InboundWebhookRepository.listRecent(10);
+      recentNotifications = await NotificationRepository.listRecent(10);
+    } catch {
+      // Tabella non ancora presente
+    }
+  }
 
   return NextResponse.json({
-    status: 'healthy',
+    status: isSupabaseConnected ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     providers: {
       supabase: {
-        connected: Boolean(supabase),
-        mode: isSupabaseConfigured ? 'production_db' : 'in_memory_fallback',
-        details: isSupabaseConfigured
-          ? 'Connesso a Supabase PostgreSQL 16 con RLS'
-          : 'In esecuzione su store locale in-memory (configura SUPABASE_URL in .env)',
+        connected: isSupabaseConnected,
+        mode: isSupabaseConnected ? 'production_db' : 'unconfigured_error',
+        details: supabaseDetails,
       },
       ghl: {
         configured: isGhlConfigured,

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { romeLocalToUtc } from '../../../lib/romeTime';
 import { AvailabilityService } from '../booking/availabilityService';
 import { AppointmentRepository } from '../../db/repositories';
 import {
@@ -86,49 +87,95 @@ const TOOLS: GeminiFunctionDeclaration[] = [
   },
 ];
 
-function buildSystemInstruction(senderName?: string): string {
-  const today = new Date().toISOString().split('T')[0];
+export function getRomeTodayDate(): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function buildSystemInstruction(senderName?: string): string {
+  const today = getRomeTodayDate();
   return [
-    "Sei l'assistente WhatsApp del salone Gianluca Parrucchieri di Forlì. Rispondi sempre in italiano, in modo breve e cordiale.",
-    `Oggi è ${today}.${senderName ? ` Il cliente si chiama ${senderName}.` : ''}`,
+    "Sei l'assistente WhatsApp del salone Gianluca Parrucchieri di Forlì (fuso orario: Europe/Rome). Rispondi sempre in italiano, in modo breve e cordiale.",
+    `Oggi a Forlì è ${today}.${senderName ? ` Il cliente si chiama ${senderName}.` : ''}`,
+    'Tutti gli orari per disponibilità e appuntamenti sono rigorosamente in ora locale italiana (Europe/Rome).',
     'Per disponibilità e prenotazioni usa SEMPRE le funzioni: non inventare orari, operatori o ID.',
-    'Prima di crea_evento proponi gli slot restituiti da controlla_disponibilita e attendi la scelta del cliente.',
+    'Prima di crea_evento proponi gli slot restituiti da controlla_disponibilita (usa ora_locale_inizio e data_locale) e attendi la scelta del cliente.',
     "Se il cliente invia una foto (es. un taglio di riferimento), descrivila brevemente e usala per capire il servizio richiesto; non promettere risultati.",
     "Per richieste che non puoi gestire (reclami, prezzi personalizzati, urgenze) rispondi che un operatore del salone lo ricontatterà.",
   ].join('\n');
-}
-
-function toIso(date: string, time: string): string {
-  return `${date}T${time}:00.000Z`;
 }
 
 function addMinutes(iso: string, minutes: number): string {
   return new Date(new Date(iso).getTime() + minutes * 60 * 1000).toISOString();
 }
 
-async function runTool(
+export async function runTool(
   name: string,
   args: Record<string, unknown>,
   customerId: string
 ): Promise<Record<string, unknown>> {
   switch (name as BookingToolName) {
     case 'controlla_disponibilita': {
-      const slots = await AvailabilityService.findAvailableSlots({
+      const rawSlots = await AvailabilityService.findAvailableSlots({
         targetDate: String(args.data),
         serviceId: args.servizio_id ? String(args.servizio_id) : undefined,
         preferredStaffId: args.staff_id ? String(args.staff_id) : undefined,
       });
-      return { slots };
+
+      const romeFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Rome',
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const slots = rawSlots.map((s) => {
+        const startParts = Object.fromEntries(
+          romeFormatter.formatToParts(new Date(s.startsAt)).map((p) => [p.type, p.value])
+        );
+        const endParts = Object.fromEntries(
+          romeFormatter.formatToParts(new Date(s.endsAt)).map((p) => [p.type, p.value])
+        );
+        return {
+          staffId: s.staffId,
+          staffName: s.staffName,
+          serviceId: s.serviceId,
+          serviceName: s.serviceName,
+          prezzo_euro: s.priceCents / 100,
+          data_locale: `${startParts.year}-${startParts.month}-${startParts.day}`,
+          ora_locale_inizio: `${startParts.hour}:${startParts.minute}`,
+          ora_locale_fine: `${endParts.hour}:${endParts.minute}`,
+          startsAt: s.startsAt,
+          endsAt: s.endsAt,
+        };
+      });
+
+      return {
+        fuso_orario: 'Europe/Rome',
+        totale_slot: slots.length,
+        slots,
+      };
     }
 
     case 'crea_evento': {
-      const startsAt = toIso(String(args.data), String(args.ora_inizio));
+      const startsAt = romeLocalToUtc(String(args.data), String(args.ora_inizio)).toISOString();
       const hold = await AvailabilityService.reserveHold({
         customerId,
         staffId: String(args.staff_id),
         serviceId: String(args.servizio_id),
         startsAt,
-        endsAt: addMinutes(startsAt, DEFAULT_DURATION_MINUTES),
         idempotencyKey: randomUUID(),
       });
       if (!hold.success || !hold.hold) {
@@ -146,9 +193,9 @@ async function runTool(
       if (!existing || existing.customer_id !== customerId) {
         return { success: false, motivo: 'Appuntamento non trovato per questo cliente' };
       }
-      const startsAt = toIso(String(args.nuova_data), String(args.nuova_ora_inizio));
+      const startsAt = romeLocalToUtc(String(args.nuova_data), String(args.nuova_ora_inizio)).toISOString();
       const durationMin =
-        (new Date(existing.ends_at).getTime() - new Date(existing.starts_at).getTime()) / 60000 ||
+        (new Date(existing.end_at).getTime() - new Date(existing.start_at).getTime()) / 60000 ||
         DEFAULT_DURATION_MINUTES;
       return AvailabilityService.rescheduleAppointment({
         appointmentId,

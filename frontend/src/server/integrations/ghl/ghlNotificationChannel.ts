@@ -51,7 +51,7 @@ export class GoHighLevelChannel implements NotificationChannel {
    */
   supports(customer: CustomerRow | null): boolean {
     if (!customer) return true; // Se l'anagrafica non è ancora registrata, si valuta sul canale
-    return customer.has_privacy_consent;
+    return Boolean(customer.has_privacy_consent);
   }
 
   async send(msg: OutboundMessage, customer?: CustomerRow | null): Promise<DeliveryReceipt> {
