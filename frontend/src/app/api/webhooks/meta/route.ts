@@ -4,6 +4,8 @@ import { MetaWebhookParser } from '@/server/integrations/meta/metaWebhookParser'
 import { InboundWebhookRepository } from '@/server/db/repositories';
 import { ConversationalAgentEngine } from '@/server/domain/conversational/conversationalAgentEngine';
 import { InboundMessageEvent } from '@/server/domain/conversational/conversationalTypes';
+import { MetaMediaClient } from '@/server/integrations/meta/metaMediaClient';
+import { ServiceMessageCounter } from '@/server/domain/messaging/serviceMessageCounter';
 
 // =============================================================================
 // TURBOBOOKING - META WEBHOOK ROUTE HANDLER (WHATSAPP, INSTAGRAM, MESSENGER, ADS)
@@ -48,7 +50,11 @@ export async function POST(request: NextRequest) {
 
   // 2. Persistenza immediata in inbound_webhooks prima dell'elaborazione (§04.7)
   const normalizedMessages = MetaWebhookParser.parse(parsedJson);
-  const externalId = normalizedMessages[0]?.messageId || `meta_${Date.now()}`;
+  const statuses = MetaWebhookParser.parseStatuses(parsedJson);
+  // Stesso messageId per sent/delivered/read: lo stato fa parte della chiave di deduplica
+  const externalId =
+    normalizedMessages[0]?.messageId ||
+    (statuses[0] ? `${statuses[0].messageId}:${statuses[0].status}` : `meta_${Date.now()}`);
 
   const { record, isDuplicate } = await InboundWebhookRepository.save({
     provider: 'meta',
@@ -64,7 +70,17 @@ export async function POST(request: NextRequest) {
 
   // 3. Elaborazione asincrona attraverso l'unica logica di dominio (ConversationalAgentEngine)
   try {
+    for (const st of statuses) {
+      ServiceMessageCounter.record({
+        phoneNumberId: st.phoneNumberId,
+        messageId: st.messageId,
+        pricingCategory: st.pricingCategory,
+      });
+    }
+
     for (const msg of normalizedMessages) {
+      const media = msg.imageMediaId ? await MetaMediaClient.fetchMediaAsBase64(msg.imageMediaId) : null;
+
       const inboundEvent: InboundMessageEvent = {
         provider: 'meta',
         channel: msg.channel === 'leadgen' ? 'whatsapp' : msg.channel,
@@ -72,6 +88,8 @@ export async function POST(request: NextRequest) {
         senderPhoneE164: msg.senderPhoneE164,
         senderName: msg.senderName,
         text: msg.text,
+        imageBase64: media?.base64,
+        imageMimeType: media?.mimeType,
         timestamp: msg.timestamp,
         rawPayload: msg.rawPayload,
       };

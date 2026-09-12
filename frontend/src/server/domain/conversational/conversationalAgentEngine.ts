@@ -9,6 +9,7 @@ import {
 } from './conversationalTypes';
 import { MetaSender } from '../../integrations/meta/metaSender';
 import { GoHighLevelChannel } from '../../integrations/ghl/ghlNotificationChannel';
+import { GeminiBookingAgent } from './geminiBookingAgent';
 
 // =============================================================================
 // TURBOBOOKING - CONVERSATIONAL AGENT ENGINE ("UNA SOLA LOGICA")
@@ -71,6 +72,37 @@ export const ConversationalAgentEngine = {
           externalId: event.senderId,
         });
       }
+    }
+
+    // WhatsApp via Meta: orchestrazione con Gemini e function-calling (§4.1.1)
+    if (event.provider === 'meta' && event.channel === 'whatsapp') {
+      const { replyText, toolsCalled } = await GeminiBookingAgent.reply({
+        customerId: customer.id,
+        phone: event.senderPhoneE164 || event.senderId,
+        senderName: event.senderName,
+        text: rawText,
+        imageBase64: event.imageBase64,
+        imageMimeType: event.imageMimeType,
+      });
+
+      const lastTool = toolsCalled[toolsCalled.length - 1];
+      const intentByTool: Record<string, ConversationIntent> = {
+        controlla_disponibilita: 'availability_query',
+        crea_evento: 'booking_confirm',
+        modifica_prenotazione: 'booking_request',
+        cancella_prenotazione: 'booking_cancel',
+      };
+
+      const geminiResult: ConversationalAgentResult = {
+        replyText,
+        intent: lastTool ? intentByTool[lastTool] : 'unknown',
+        customer,
+        escalatedToHuman: false,
+        requiresCustomerAction: lastTool !== 'crea_evento' && lastTool !== 'cancella_prenotazione',
+      };
+
+      await this.dispatchOutboundReply(event, replyText, customer);
+      return geminiResult;
     }
 
     const sessionKey = `${event.channel}:${event.senderId}`;

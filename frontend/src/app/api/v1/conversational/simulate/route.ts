@@ -10,10 +10,18 @@ import { InboundMessageEvent } from '@/server/domain/conversational/conversation
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, channel = 'whatsapp', provider = 'meta', phone = '+393401234567', senderName = 'Chiara Ferrandi' } = body;
+    const {
+      message = '',
+      channel = 'whatsapp',
+      provider = 'meta',
+      phone = '+393401234567',
+      senderName = 'Chiara Ferrandi',
+      imageBase64,
+      imageMimeType,
+    } = body;
 
-    if (!message || typeof message !== 'string') {
-      return NextResponse.json({ error: 'Campo "message" obbligatorio' }, { status: 400 });
+    if (typeof message !== 'string' || (!message && !imageBase64)) {
+      return NextResponse.json({ error: 'Serve "message" oppure "imageBase64"' }, { status: 400 });
     }
 
     const inboundEvent: InboundMessageEvent = {
@@ -23,6 +31,8 @@ export async function POST(request: NextRequest) {
       senderPhoneE164: phone,
       senderName,
       text: message,
+      imageBase64,
+      imageMimeType,
       timestamp: Date.now(),
       rawPayload: { simulated: true },
     };

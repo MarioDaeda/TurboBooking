@@ -119,4 +119,36 @@ export const AvailabilityService = {
     }
     return { success: true, appointment: hold };
   },
+
+  /**
+   * Cancella un appuntamento esistente (cancella_prenotazione)
+   */
+  async cancelAppointment(appointmentId: string): Promise<{ success: boolean; appointment?: AppointmentHoldRow }> {
+    const cancelled = await AppointmentRepository.cancel(appointmentId);
+    if (!cancelled) {
+      return { success: false };
+    }
+    return { success: true, appointment: cancelled };
+  },
+
+  /**
+   * Sposta un appuntamento su un nuovo slot (modifica_prenotazione)
+   */
+  async rescheduleAppointment({
+    appointmentId,
+    startsAt,
+    endsAt,
+    staffId,
+  }: {
+    appointmentId: string;
+    startsAt: string;
+    endsAt: string;
+    staffId?: string;
+  }): Promise<{ success: boolean; appointment?: AppointmentHoldRow }> {
+    const updated = await AppointmentRepository.reschedule(appointmentId, { startsAt, endsAt, staffId });
+    if (!updated) {
+      return { success: false };
+    }
+    return { success: true, appointment: updated };
+  },
 };
