@@ -525,4 +525,58 @@ export const AppointmentRepository = {
 
     return memAppointments.get(holdId) || null;
   },
+
+  /**
+   * Cancella un appuntamento (cancella_prenotazione via WhatsApp/Gemini)
+   */
+  async cancel(appointmentId: string): Promise<AppointmentHoldRow | null> {
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
+      const { data } = await supabase
+        .from('appointments')
+        .update({ status: 'cancelled' })
+        .eq('id', appointmentId)
+        .select()
+        .single();
+      return (data as AppointmentHoldRow) || null;
+    }
+
+    const item = memAppointments.get(appointmentId);
+    if (item) {
+      item.status = 'cancelled';
+      return item;
+    }
+    return null;
+  },
+
+  /**
+   * Sposta un appuntamento esistente su un nuovo slot (modifica_prenotazione via WhatsApp/Gemini)
+   */
+  async reschedule(
+    appointmentId: string,
+    { startsAt, endsAt, staffId }: { startsAt: string; endsAt: string; staffId?: string }
+  ): Promise<AppointmentHoldRow | null> {
+    const supabase = getSupabaseAdminClient();
+    const patch: Partial<AppointmentHoldRow> = { starts_at: startsAt, ends_at: endsAt };
+    if (staffId) {
+      patch.staff_id = staffId;
+    }
+
+    if (supabase) {
+      const { data } = await supabase
+        .from('appointments')
+        .update(patch)
+        .eq('id', appointmentId)
+        .select()
+        .single();
+      return (data as AppointmentHoldRow) || null;
+    }
+
+    const item = memAppointments.get(appointmentId);
+    if (item) {
+      Object.assign(item, patch);
+      return item;
+    }
+    return null;
+  },
 };
