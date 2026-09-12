@@ -9,7 +9,7 @@ import {
 } from './conversationalTypes';
 import { MetaSender } from '../../integrations/meta/metaSender';
 import { GoHighLevelChannel } from '../../integrations/ghl/ghlNotificationChannel';
-import { ClaudeBookingAgent } from './claudeBookingAgent';
+import { GeminiBookingAgent } from './geminiBookingAgent';
 
 // =============================================================================
 // TURBOBOOKING - CONVERSATIONAL AGENT ENGINE ("UNA SOLA LOGICA")
@@ -51,6 +51,16 @@ export const ConversationalAgentEngine = {
           marketingConsent: false, // Il messaggio spontaneo apre la finestra di servizio ma NON dà consenso al marketing (§04.2)
         });
       }
+
+      // Sincronizzazione riferimento esterno
+      if (customer && event.senderId) {
+        await ExternalRefsRepository.upsertRef({
+          provider: event.provider === 'ghl' ? 'ghl' : 'meta',
+          entityType: 'customer',
+          entityId: customer.id,
+          externalId: event.senderId,
+        });
+      }
     } else {
       // Per canali social senza numero immediato (Instagram/Messenger ID)
       const ref = await ExternalRefsRepository.getByExternalId('meta', 'customer', event.senderId);
@@ -74,21 +84,35 @@ export const ConversationalAgentEngine = {
       }
     }
 
-    // WhatsApp: prenotazione in linguaggio naturale tramite Claude
-    if (event.channel === 'whatsapp' && event.senderPhoneE164 && ClaudeBookingAgent.isConfigured()) {
-      const replyText = await ClaudeBookingAgent.reply({
-        phone: event.senderPhoneE164,
+    // WhatsApp via Meta: orchestrazione con Gemini e function-calling (§4.1.1)
+    if (event.provider === 'meta' && event.channel === 'whatsapp' && customer) {
+      const { replyText, toolsCalled } = await GeminiBookingAgent.reply({
+        customerId: customer.id,
+        phone: event.senderPhoneE164 || event.senderId,
         senderName: event.senderName,
         text: rawText,
+        imageBase64: event.imageBase64,
+        imageMimeType: event.imageMimeType,
       });
-      await this.dispatchOutboundReply(event, replyText, customer);
-      return {
+
+      const lastTool = toolsCalled[toolsCalled.length - 1];
+      const intentByTool: Record<string, ConversationIntent> = {
+        controlla_disponibilita: 'availability_query',
+        crea_evento: 'booking_confirm',
+        modifica_prenotazione: 'booking_request',
+        cancella_prenotazione: 'booking_cancel',
+      };
+
+      const geminiResult: ConversationalAgentResult = {
         replyText,
-        intent: 'unknown',
+        intent: lastTool ? intentByTool[lastTool] : 'unknown',
         customer,
         escalatedToHuman: false,
-        requiresCustomerAction: true,
+        requiresCustomerAction: lastTool !== 'crea_evento' && lastTool !== 'cancella_prenotazione',
       };
+
+      await this.dispatchOutboundReply(event, replyText, customer);
+      return geminiResult;
     }
 
     const sessionKey = `${event.channel}:${event.senderId}`;
