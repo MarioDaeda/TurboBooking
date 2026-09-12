@@ -17,6 +17,7 @@ interface AgendaViewProps {
   selectedDay?: string;
   salonHours?: DaySchedule[];
   dayOverrides?: { [dayKey: string]: { isOpen: boolean; openTime: string; closeTime: string } };
+  agendaDays?: AgendaDay[];
   onSaveDaySchedule?: (params: {
     dayKey: string;
     dayName: string;
@@ -72,12 +73,10 @@ const formatDurationHours = (minutes: number): string => {
   return `${h}.${m.toString().padStart(2, '0')}h`;
 };
 
-const getIsoDateForDayKey = (dayKey: string): string => {
-  const found = AGENDA_DAYS.find((d) => d.key === dayKey);
-  if (!found) return '2026-09-02';
-  const dayNum = found.date.padStart(2, '0');
-  const month = found.date === '31' ? '08' : '09';
-  return `2026-${month}-${dayNum}`;
+const getIsoDateForDayKey = (dayKey: string, daysList: AgendaDay[] = AGENDA_DAYS): string => {
+  const found = daysList.find((d) => d.key === dayKey);
+  if (found && found.isoDate) return found.isoDate;
+  return new Date().toISOString().substring(0, 10);
 };
 
 export const AgendaView: React.FC<AgendaViewProps> = ({
@@ -91,6 +90,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   selectedDay,
   salonHours,
   dayOverrides,
+  agendaDays = AGENDA_DAYS,
   onSaveDaySchedule,
   onResetDayOverride,
 }) => {
@@ -302,7 +302,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             ...targetApp,
             startTime: draggingState.currentStartTime,
             dayOfWeek: draggingState.currentDayOfWeek,
-            date: getIsoDateForDayKey(draggingState.currentDayOfWeek),
+            date: getIsoDateForDayKey(draggingState.currentDayOfWeek, agendaDays),
             staffId: targetStaff.id,
             staffName: targetStaff.name,
             staffInitials: targetStaff.initials,
@@ -318,7 +318,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   const todayIndex = useMemo(() => getTodayIndex(), []);
 
   const daysWithSchedule = useMemo(() => {
-    return AGENDA_DAYS.map((day, idx) => {
+    return agendaDays.map((day, idx) => {
       // 1. Check explicit override for this specific date (e.g. "MER 2" or "LUN 31")
       const override = dayOverrides?.[day.key];
 
@@ -345,7 +345,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         isOverridden,
       };
     });
-  }, [salonHours, dayOverrides, todayIndex]);
+  }, [agendaDays, salonHours, dayOverrides, todayIndex]);
 
   // In vista "giornaliero" mostriamo solo il giorno selezionato, non l'intera settimana.
   const days =
@@ -530,7 +530,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                         const effectiveStaff = isThisAppDragged ? draggingState.currentStaffId : app.staffId;
 
                         return (
-                          effectiveDay === day.key &&
+                          (effectiveDay === day.key || (app.date && day.isoDate && app.date === day.isoDate)) &&
                           (effectiveStaff === staff.id || app.staffInitials === staff.initials)
                         );
                       })

@@ -13,8 +13,6 @@ export interface InboundMessageEvent {
   senderPhoneE164?: string;
   senderName?: string;
   text: string;
-  imageBase64?: string;
-  imageMimeType?: string;
   timestamp: number;
   rawPayload: Record<string, unknown>;
   locationId?: string;

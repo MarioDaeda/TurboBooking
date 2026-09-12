@@ -13,14 +13,14 @@ import {
   FileText,
   Trash2,
   Printer,
-  ArrowRight,
   Armchair,
   Search,
   ChevronDown,
   Calendar,
   Scissors,
+  AlertCircle,
 } from 'lucide-react';
-import { Appointment, ServiceItem, StaffMember } from '@/types';
+import { Appointment, ServiceItem, StaffMember, Client } from '@/types';
 import { getTodayDayKey, getTodayIsoDate } from '@/lib/agendaDays';
 
 const formatDurationHours = (minutes: number): string =>
@@ -34,8 +34,9 @@ interface AppointmentModalProps {
   appointment: Appointment | null;
   services: ServiceItem[];
   staffList: StaffMember[];
-  onSave: (app: Appointment) => void;
-  onDelete: (appId: string) => void;
+  clients?: Client[];
+  onSave: (app: Appointment) => Promise<void> | void;
+  onDelete: (appId: string) => Promise<void> | void;
   onSendToCassa: (app: Appointment) => void;
 }
 
@@ -45,6 +46,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   appointment,
   services,
   staffList,
+  clients,
   onSave,
   onDelete,
   onSendToCassa,
@@ -52,11 +54,15 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
+  const [clientId, setClientId] = useState('');
   const [hasPrivacyConsent, setHasPrivacyConsent] = useState(false);
   const [serviceId, setServiceId] = useState('');
   const [staffId, setStaffId] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(45);
   const [notes, setNotes] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
 
   // Search & Filter state for treatment dropdown
   const [isServiceDropdownOpen, setIsServiceDropdownOpen] = useState(false);
@@ -66,11 +72,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Default service is Taglio Uomo Top Stylist (srv-5)
+  // Default service is the first available service from Supabase
   const defaultService = useMemo(() => {
     return (
-      services.find((s) => s.id === 'srv-5') ||
       services.find((s) => s.name.toLowerCase().includes('taglio uomo top stylist')) ||
+      services.find((s) => s.name.toLowerCase().includes('taglio')) ||
       services[0]
     );
   }, [services]);
@@ -120,7 +126,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   useEffect(() => {
     if (appointment) {
-      setClientName(appointment.clientName);
+      setClientId(appointment.clientId || '');
+      setClientName(appointment.clientName || '');
       setClientPhone(appointment.clientPhone || '');
       setClientEmail(appointment.clientEmail || '');
       setHasPrivacyConsent(appointment.hasPrivacyConsent);
@@ -129,12 +136,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setDurationMinutes(appointment.durationMinutes);
       setNotes(appointment.notes || '');
     } else {
-      setClientName('Morena');
-      setClientPhone('+39 347 1234567');
+      setClientId('');
+      setClientName('');
+      setClientPhone('');
       setClientEmail('');
       setHasPrivacyConsent(false);
       const def = defaultService;
-      setServiceId(def?.id || '');
+      setServiceId(def?.id || services[0]?.id || '');
       setStaffId(staffList[0]?.id || '');
       setDurationMinutes(def?.durationMinutes || 45);
       setNotes('');
@@ -142,6 +150,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     setIsServiceDropdownOpen(false);
     setServiceSearchQuery('');
     setSelectedCategoryFilter('TUTTI');
+    setErrorMessage(null);
   }, [appointment, services, staffList, defaultService]);
 
   if (!isOpen) return null;
@@ -149,27 +158,28 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const currentService = services.find((s) => s.id === serviceId) || defaultService;
   const currentStaff = staffList.find((st) => st.id === staffId) || staffList[0];
 
-  const buildAppointmentObject = (): Appointment => {
+  const buildAppointmentObject = (resolvedClientId?: string): Appointment => {
     const existingId = appointment?.id;
-    const existingClientId =
-      appointment?.clientId && appointment.clientId !== 'cli-new' && appointment.clientId !== 'cli-temp'
-        ? appointment.clientId
-        : `cli-${Date.now()}`;
+    const finalClientId =
+      resolvedClientId ||
+      clientId ||
+      appointment?.clientId ||
+      '';
 
     return {
       id: existingId || `app-${Date.now()}`,
-      clientId: existingClientId,
+      clientId: finalClientId,
       clientName: clientName.trim() || 'Nuovo Cliente',
       clientPhone: clientPhone.trim(),
       clientEmail: clientEmail.trim(),
       hasPrivacyConsent,
-      serviceId: currentService?.id || defaultService?.id || 'srv-5',
-      serviceName: currentService?.name || defaultService?.name || 'Taglio Uomo Top Stylist',
-      serviceShortname: currentService?.shortname || defaultService?.shortname || 'TU',
-      serviceColor: currentService?.categoryColor || defaultService?.categoryColor || '#8B5CF6',
-      staffId: currentStaff?.id || 'staff-1',
-      staffInitials: currentStaff?.initials || 'GI',
-      staffName: currentStaff?.name || 'Gianluca',
+      serviceId: currentService?.id || defaultService?.id || services[0]?.id || '',
+      serviceName: currentService?.name || defaultService?.name || 'Trattamento',
+      serviceShortname: currentService?.shortname || defaultService?.shortname || 'TR',
+      serviceColor: currentService?.categoryColor || defaultService?.categoryColor || '#3B82F6',
+      staffId: currentStaff?.id || staffList[0]?.id || '',
+      staffInitials: currentStaff?.initials || staffList[0]?.initials || 'OP',
+      staffName: currentStaff?.name || staffList[0]?.name || 'Operatore',
       date: appointment ? appointment.date : getTodayIsoDate(),
       dayOfWeek: appointment ? appointment.dayOfWeek : getTodayDayKey(),
       startTime: appointment ? appointment.startTime : '08:00',
@@ -183,17 +193,60 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     };
   };
 
-  const handleSave = () => {
-    const updated = buildAppointmentObject();
-    onSave(updated);
-    onClose();
-  };
+  const handleSave = async () => {
+    setIsSaving(true);
+    setErrorMessage(null);
 
-  const handleSendToCassaClick = () => {
-    const updated = buildAppointmentObject();
-    onSave(updated);
-    onSendToCassa(updated);
-    onClose();
+    try {
+      let resolvedId = clientId;
+
+      // Se il cliente non ha ancora un ID UUID valido:
+      if (!resolvedId || !resolvedId.includes('-')) {
+        const existing = clients?.find(
+          (c) =>
+            (clientPhone && c.phone && c.phone.trim() === clientPhone.trim()) ||
+            (clientName && c.name.toLowerCase() === clientName.toLowerCase().trim())
+        );
+
+        if (existing && existing.id && existing.id.includes('-')) {
+          resolvedId = existing.id;
+        } else if (clientName.trim()) {
+          const parts = clientName.trim().split(' ');
+          const firstName = parts[0] || 'Cliente';
+          const lastName = parts.slice(1).join(' ') || null;
+
+          const res = await fetch('/api/v1/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              firstName,
+              lastName,
+              phone: clientPhone.trim() || undefined,
+              email: clientEmail.trim() || undefined,
+              notes: notes.trim() || undefined,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Errore durante la creazione del cliente.');
+          }
+          resolvedId = data.customer.id;
+          setClientId(resolvedId);
+        }
+      }
+
+      if (!resolvedId) {
+        throw new Error('Inserisci il nome del cliente prima di salvare.');
+      }
+
+      const updated = buildAppointmentObject(resolvedId);
+      await onSave(updated);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore durante il salvataggio.';
+      setErrorMessage(msg);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSelectService = (srv: ServiceItem) => {
@@ -202,7 +255,6 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setDurationMinutes(srv.durationMinutes);
     }
     setIsServiceDropdownOpen(false);
-    setServiceSearchQuery('');
   };
 
   return (
@@ -231,6 +283,14 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
           </button>
         </div>
 
+        {/* Error Banner if any */}
+        {errorMessage && (
+          <div className="mx-6 sm:mx-8 mt-4 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span className="font-semibold">{errorMessage}</span>
+          </div>
+        )}
+
         {/* Modal Form Body */}
         <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
           {/* Client Details Card */}
@@ -241,35 +301,75 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             </div>
 
             {/* Client Name with Info & History Icons */}
-            <div className="relative flex items-center">
-              <input
-                type="text"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="Nome e cognome cliente..."
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-tw-blue/30 focus:border-tw-blue pr-24 shadow-xs"
-              />
-              <div className="absolute right-3.5 flex items-center gap-2 text-gray-400">
-                <button
-                  type="button"
-                  onClick={() => alert(`Dettagli cliente: ${clientName || 'Nuovo'}`)}
-                  className="hover:text-tw-blue p-1.5 rounded-lg hover:bg-blue-50 transition"
-                  title="Scheda cliente"
-                >
-                  <Info className="w-4 h-4 text-tw-blue" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => alert(`Storico appuntamenti di: ${clientName || 'Cliente'}`)}
-                  className="relative hover:text-tw-blue p-1.5 rounded-lg hover:bg-blue-50 transition"
-                  title="Storico visite"
-                >
-                  <ListFilter className="w-4 h-4" />
-                  <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                    1
-                  </span>
-                </button>
+            <div className="relative">
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  value={clientName}
+                  onFocus={() => setShowClientSuggestions(true)}
+                  onChange={(e) => {
+                    setClientName(e.target.value);
+                    setShowClientSuggestions(true);
+                  }}
+                  placeholder="Nome e cognome cliente..."
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-tw-blue/30 focus:border-tw-blue pr-24 shadow-xs"
+                />
+                <div className="absolute right-3.5 flex items-center gap-2 text-gray-400">
+                  <button
+                    type="button"
+                    onClick={() => alert(`Dettagli cliente: ${clientName || 'Nuovo'}`)}
+                    className="hover:text-tw-blue p-1.5 rounded-lg hover:bg-blue-50 transition"
+                    title="Scheda cliente"
+                  >
+                    <Info className="w-4 h-4 text-tw-blue" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => alert(`Storico appuntamenti di: ${clientName || 'Cliente'}`)}
+                    className="relative hover:text-tw-blue p-1.5 rounded-lg hover:bg-blue-50 transition"
+                    title="Storico visite"
+                  >
+                    <ListFilter className="w-4 h-4" />
+                    <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      1
+                    </span>
+                  </button>
+                </div>
               </div>
+
+              {/* Client Suggestions Dropdown */}
+              {showClientSuggestions && clients && clients.length > 0 && clientName.trim().length >= 1 && (
+                <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-gray-100">
+                  {clients
+                    .filter((c) =>
+                      c.name.toLowerCase().includes(clientName.toLowerCase()) ||
+                      (c.phone && c.phone.includes(clientName))
+                    )
+                    .slice(0, 5)
+                    .map((c) => (
+                      <div
+                        key={c.id}
+                        onMouseDown={() => {
+                          setClientId(c.id);
+                          setClientName(c.name);
+                          setClientPhone(c.phone || '');
+                          setClientEmail(c.email || '');
+                          setHasPrivacyConsent(c.hasPrivacyConsent);
+                          setShowClientSuggestions(false);
+                        }}
+                        className="p-2.5 hover:bg-blue-50 cursor-pointer text-xs flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="font-bold text-gray-800">{c.name}</div>
+                          <div className="text-[11px] text-gray-500">{c.phone || 'Nessun telefono'}</div>
+                        </div>
+                        <span className="text-[10px] text-tw-blue font-mono bg-blue-50 px-1.5 py-0.5 rounded">
+                          Seleziona
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
 
             {/* Phone & Email in a 2-Column Responsive Grid */}
@@ -650,16 +750,32 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               </button>
             </div>
 
-            {/* Prominent Save / Confirm Button in Footer */}
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-6 py-2.5 rounded-xl bg-tw-blue hover:bg-tw-blue-hover text-white text-sm font-bold flex items-center gap-2 shadow-sm transition"
-              title="Salva e conferma appuntamento"
-            >
-              <Check className="w-4 h-4" />
-              <span>Salva Appuntamento</span>
-            </button>
+            {/* Prominent Save / Confirm Buttons in Footer */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = buildAppointmentObject();
+                  onSave(updated);
+                  onSendToCassa(updated);
+                  onClose();
+                }}
+                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold flex items-center gap-1.5 shadow-sm transition"
+                title="Salva e invia a cassa"
+              >
+                <span>Alla Cassa</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-6 py-2.5 rounded-xl bg-tw-blue hover:bg-tw-blue-hover text-white text-sm font-bold flex items-center gap-2 shadow-sm transition disabled:opacity-50"
+                title="Salva e conferma appuntamento"
+              >
+                <Check className="w-4 h-4" />
+                <span>{isSaving ? 'Salvataggio...' : 'Salva Appuntamento'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

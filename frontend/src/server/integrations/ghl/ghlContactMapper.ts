@@ -79,8 +79,8 @@ export const GhlContactMapper = {
 
     return {
       firstName: customer.first_name,
-      lastName: customer.last_name,
-      phone: customer.phone_e164,
+      lastName: customer.last_name || '',
+      phone: customer.phone_e164 || customer.phone || '',
       email: customer.email || undefined,
       tags,
       customFields,

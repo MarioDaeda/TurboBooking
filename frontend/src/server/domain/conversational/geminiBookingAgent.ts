@@ -148,7 +148,7 @@ async function runTool(
       }
       const startsAt = toIso(String(args.nuova_data), String(args.nuova_ora_inizio));
       const durationMin =
-        (new Date(existing.ends_at).getTime() - new Date(existing.starts_at).getTime()) / 60000 ||
+        (new Date(existing.end_at).getTime() - new Date(existing.start_at).getTime()) / 60000 ||
         DEFAULT_DURATION_MINUTES;
       return AvailabilityService.rescheduleAppointment({
         appointmentId,

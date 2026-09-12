@@ -41,6 +41,8 @@ interface TopHeaderProps {
   onPrevDay?: () => void;
   onNextDay?: () => void;
   onSelectSection?: (section: SectionId) => void;
+  weekRangeLabel?: string;
+  monthLabel?: string;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -57,6 +59,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onPrevDay,
   onNextDay,
   onSelectSection,
+  weekRangeLabel,
+  monthLabel = 'SET',
 }) => {
   const [timeStr, setTimeStr] = useState('01:24');
 
@@ -150,14 +154,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <button className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition">
               <Calendar className="w-5 h-5 text-gray-700" />
             </button>
-            <span className="font-semibold text-xs text-gray-700 uppercase tracking-wide">AGO</span>
+            <span className="font-semibold text-xs text-gray-700 uppercase tracking-wide">{monthLabel}</span>
             <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5 text-xs text-tw-blue font-semibold">
               {viewMode === 'settimanale' ? (
-                <>
-                  <span>LUN 31</span>
-                  <span className="text-gray-400">→</span>
-                  <span>DOM 06</span>
-                </>
+                <span>{weekRangeLabel || 'LUN 07 → DOM 13'}</span>
               ) : (
                 <span>{selectedDay}</span>
               )}

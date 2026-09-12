@@ -10,11 +10,12 @@ interface StaffViewProps {
 }
 
 export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => {
-  const [selectedStaffId, setSelectedStaffId] = useState<string>(staffList[0]?.id || 'staff-1');
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
 
-  const currentStaff = staffList.find((s) => s.id === selectedStaffId) || staffList[0];
+  const effectiveStaffId = selectedStaffId || staffList[0]?.id || '';
+  const currentStaff = staffList.find((s) => s.id === effectiveStaffId) || staffList[0];
 
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none">

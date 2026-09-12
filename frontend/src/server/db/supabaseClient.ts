@@ -1,15 +1,97 @@
+import 'server-only';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // =============================================================================
-// TURBOBOOKING - SUPABASE CLIENT & TYPE DEFINITIONS
-// Database: PostgreSQL 16 con RLS e isolamento multi-tenant (organization_id)
+// TURBOBOOKING - SUPABASE CLIENT & TYPE DEFINITIONS (SERVER ONLY)
+// Adattato allo schema reale:
+// - bookings (start_at, end_at, hold_expires_at, status: BookingStatus)
+// - operators (id, name, active, is_bookable_online, sort_order)
+// - customers (id, first_name, last_name, phone nullable, email, notes)
+// - services (id, name, duration_minutes, price, active, ...)
 // =============================================================================
+
+export type BookingStatus =
+  | 'hold'
+  | 'confirmed'
+  | 'cancelled'
+  | 'completed'
+  | 'no_show'
+  | 'expired';
+
+export type BookingSource = 'dashboard' | 'ai_phone' | 'whatsapp' | 'ghl' | 'manual';
+
+export interface BookingRow {
+  id: string;
+  service_id: string;
+  operator_id: string;
+  customer_id: string;
+  start_at: string;
+  end_at: string;
+  status: BookingStatus;
+  hold_expires_at: string | null;
+  notes?: string | null;
+  source?: BookingSource | string | null;
+  idempotency_key?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  price_snapshot?: number | null;
+  service_name_snapshot?: string | null;
+  external_id?: string | null;
+}
+
+// Alias di compatibilità per codice pre-migrazione
+export type AppointmentHoldRow = BookingRow;
+
+export interface OperatorRow {
+  id: string;
+  name: string;
+  active: boolean;
+  is_bookable_online: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ServiceRow {
+  id: string;
+  name: string;
+  description: string | null;
+  duration_minutes: number;
+  price: number;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+  short_name: string | null;
+  category: string;
+  category_color: string | null;
+  is_bookable_online: boolean;
+  is_quick_choice: boolean;
+  posa_minutes: number | null;
+  has_variants: boolean;
+  sanificazione: boolean;
+  display_order: number;
+}
+
+export interface CustomerRow {
+  id: string;
+  first_name: string;
+  last_name: string | null;
+  phone: string | null; // Nullable nel database reale
+  email: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+
+  // Campi ausiliari per compatibilità TypeScript
+  phone_e164?: string;
+  has_privacy_consent?: boolean;
+  marketing_consent?: boolean;
+}
 
 export interface InboundWebhookRow {
   id: string;
   provider: 'ghl' | 'meta' | 'google' | 'stripe' | 'bettercallq';
   external_id: string | null;
-  organization_id: string | null;
   signature_valid: boolean;
   payload: Record<string, unknown>;
   received_at: string;
@@ -17,24 +99,8 @@ export interface InboundWebhookRow {
   error: string | null;
 }
 
-export interface CustomerRow {
-  id: string;
-  organization_id: string;
-  first_name: string;
-  last_name: string;
-  phone_e164: string;
-  email: string | null;
-  has_privacy_consent: boolean;
-  marketing_consent: boolean;
-  notes_technical_art9?: string; // STRICT: Mai sincronizzato verso l'esterno
-  allergies_art9?: string;        // STRICT: Mai sincronizzato verso l'esterno
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ExternalRefRow {
   id: string;
-  organization_id: string;
   provider: 'ghl' | 'meta' | 'google' | 'stripe';
   entity_type: 'customer' | 'appointment' | 'venue' | 'staff';
   entity_id: string;
@@ -48,7 +114,6 @@ export interface ExternalRefRow {
 
 export interface NotificationMessageRow {
   id: string;
-  organization_id: string;
   customer_id: string | null;
   appointment_id: string | null;
   channel: 'sms' | 'email' | 'whatsapp' | 'instagram' | 'messenger' | 'push';
@@ -65,38 +130,55 @@ export interface NotificationMessageRow {
   created_at: string;
 }
 
-export interface AppointmentHoldRow {
+export interface WorkingHoursRow {
   id: string;
-  organization_id: string;
-  venue_id: string;
-  customer_id: string;
-  staff_id: string;
-  service_id: string;
-  starts_at: string;
-  ends_at: string;
-  status: 'hold' | 'confirmed' | 'cancelled';
-  expires_at: string;
-  idempotency_key: string;
-  created_at: string;
+  operator_id: string;
+  day_of_week: number; // ISO: 1=Lunedì, ..., 7=Domenica
+  start_time: string; // "09:00:00" (fuso Europe/Rome)
+  end_time: string; // "19:00:00"
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BlockedPeriodRow {
+  id: string;
+  operator_id: string;
+  start_at: string;
+  end_at: string;
+  reason: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DatabaseSchema {
-  inbound_webhooks: InboundWebhookRow;
+  services: ServiceRow;
+  operators: OperatorRow;
   customers: CustomerRow;
+  bookings: BookingRow;
+  working_hours: WorkingHoursRow;
+  blocked_periods: BlockedPeriodRow;
+  inbound_webhooks: InboundWebhookRow;
   external_refs: ExternalRefRow;
   notification_messages: NotificationMessageRow;
-  appointments: AppointmentHoldRow;
 }
 
-// Client singleton references
+// Client singleton reference
 let adminClientInstance: SupabaseClient | null = null;
 
-export function getSupabaseAdminClient(): SupabaseClient | null {
+/**
+ * Restituisce il client Supabase amministrativo (Service Role).
+ * Può essere chiamato solo sul server (protetto da 'server-only').
+ * Se le credenziali non sono presenti o non valide, solleva un errore esplicito.
+ */
+export function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey || supabaseUrl.includes('your-project-id')) {
-    return null;
+    throw new Error(
+      'Configurazione Supabase mancante: SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY non configurate in .env.local. Impossibile inizializzare il client amministrativo.'
+    );
   }
 
   if (!adminClientInstance) {
@@ -109,46 +191,4 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   }
 
   return adminClientInstance;
-}
-
-export function getSupabaseUserClient(jwtToken?: string): SupabaseClient | null {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !anonKey || supabaseUrl.includes('your-project-id')) {
-    return null;
-  }
-
-  return createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {},
-    },
-    auth: {
-      persistSession: false,
-    },
-  });
-}
-
-/**
- * Esegue un blocco transazionale con tenant isolato (SET LOCAL app.current_org)
- * Se Supabase/Postgres non è ancora connesso via env, esegue in modalità fallback.
- */
-export async function withTenantContext<T>(
-  orgId: string,
-  fn: (supabase: SupabaseClient | null) => Promise<T>
-): Promise<T> {
-  const client = getSupabaseAdminClient();
-  if (!client) {
-    // Fallback locale di sviluppo quando le credenziali non sono ancora configurate
-    return await fn(null);
-  }
-
-  // RLS tenant setting per Supabase RPC o transazione
-  try {
-    await client.rpc('set_tenant_context', { p_org_id: orgId });
-  } catch {
-    // Procedi anche se la funzione RPC non è ancora registrata nel DB
-  }
-
-  return await fn(client);
 }

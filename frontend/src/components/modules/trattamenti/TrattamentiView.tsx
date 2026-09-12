@@ -11,9 +11,10 @@ interface TrattamentiViewProps {
 export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) => {
   const [activeTab, setActiveTab] = useState<'trattamenti' | 'pacchetto'>('trattamenti');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>('srv-1');
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
 
-  const selectedService = services.find((s) => s.id === selectedServiceId) || services[0];
+  const effectiveSelectedId = selectedServiceId || services[0]?.id || null;
+  const selectedService = services.find((s) => s.id === effectiveSelectedId) || services[0];
 
   const filteredServices = services.filter(
     (srv) =>
