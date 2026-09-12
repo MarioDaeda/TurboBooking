@@ -69,3 +69,11 @@ next-env.d.ts.bak
 logs/
 *.log
 *.tmp
+
+# ==========================================
+# Output generati (scripts/build_*.js) e screenshot di terzi
+# ==========================================
+/TurboBooking.html
+/TurboBooking-Demo.html
+frontend/public/TurboBooking-Demo.html
+foto-treatwellpro/
