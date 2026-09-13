@@ -199,17 +199,21 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
     try {
       let resolvedId = clientId;
+      if (appointment && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appointment.id)
+          && resolvedId !== appointment.clientId) {
+        throw new Error('Il cliente di un appuntamento esistente non può essere sostituito da questa finestra.');
+      }
 
       // Se il cliente non ha ancora un ID UUID valido:
-      if (!resolvedId || !resolvedId.includes('-')) {
-        const existing = clients?.find(
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedId)) {
+        const existing = clients?.some(
           (c) =>
             (clientPhone && c.phone && c.phone.trim() === clientPhone.trim()) ||
             (clientName && c.name.toLowerCase() === clientName.toLowerCase().trim())
         );
 
-        if (existing && existing.id && existing.id.includes('-')) {
-          resolvedId = existing.id;
+        if (existing) {
+          throw new Error('Esistono clienti con questo nome o telefono. Seleziona esplicitamente il cliente dai suggerimenti.');
         } else if (clientName.trim()) {
           const parts = clientName.trim().split(' ');
           const firstName = parts[0] || 'Cliente';
@@ -224,6 +228,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               phone: clientPhone.trim() || undefined,
               email: clientEmail.trim() || undefined,
               notes: notes.trim() || undefined,
+              privacyConsent: hasPrivacyConsent,
             }),
           });
           const data = await res.json();
@@ -241,6 +246,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
       const updated = buildAppointmentObject(resolvedId);
       await onSave(updated);
+      onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Errore durante il salvataggio.';
       setErrorMessage(msg);
@@ -309,6 +315,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                   onFocus={() => setShowClientSuggestions(true)}
                   onChange={(e) => {
                     setClientName(e.target.value);
+                    setClientId('');
+                    setHasPrivacyConsent(false);
                     setShowClientSuggestions(true);
                   }}
                   placeholder="Nome e cognome cliente..."

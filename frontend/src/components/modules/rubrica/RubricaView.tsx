@@ -20,7 +20,7 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newNotes, setNewNotes] = useState('');
-  const [newPrivacy, setNewPrivacy] = useState(true);
+  const [newPrivacy, setNewPrivacy] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -107,6 +107,7 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
           phone: newPhone.trim() || undefined,
           email: newEmail.trim() || undefined,
           notes: newNotes.trim() || undefined,
+          privacyConsent: newPrivacy,
         }),
       });
 
@@ -120,7 +121,7 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
         name: `${data.customer.first_name || ''} ${data.customer.last_name || ''}`.trim() || 'Nuovo Cliente',
         phone: data.customer.phone || '',
         email: data.customer.email || '',
-        hasPrivacyConsent: newPrivacy,
+        hasPrivacyConsent: !!data.customer.has_privacy_consent,
         notes: data.customer.notes || undefined,
         totalVisits: 0,
         lastVisit: 'Oggi',
@@ -138,6 +139,7 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
       setNewPhone('');
       setNewEmail('');
       setNewNotes('');
+      setNewPrivacy(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Errore salvataggio cliente';
       setFormError(msg);

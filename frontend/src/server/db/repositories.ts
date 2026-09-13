@@ -222,8 +222,12 @@ export const CustomerRepository = {
    */
   async search(query: string): Promise<CustomerRow[]> {
     const supabase = getSupabaseAdminClient();
-    const clean = query.trim();
-    if (!clean) return this.listRecent(50);
+    if (!query.trim()) return this.listRecent(50);
+    // PostgREST .or() accepts a filter expression, not a bound text value.
+    // Strip grammar and wildcard characters while retaining names and phones.
+    const clean = query.trim().replace(/[^\p{L}\p{N}\s'+-]/gu, ' ').trim();
+    if (!clean) return [];
+    if (clean.length > 200) throw new Error('TB_INVALID_REQUEST');
 
     const { data, error } = await supabase
       .from('customers')
@@ -984,7 +988,7 @@ export const InboundWebhookRepository = {
     signatureValid,
     payload,
   }: {
-    provider: 'ghl' | 'meta' | 'google' | 'stripe' | 'bettercallq';
+    provider: 'ghl' | 'meta' | 'google' | 'stripe';
     externalId: string | null;
     organizationId?: string | null;
     signatureValid: boolean;

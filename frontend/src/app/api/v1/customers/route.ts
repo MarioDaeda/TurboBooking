@@ -41,10 +41,18 @@ export async function POST(request: NextRequest) {
     const auth = await verifyStaffAuthorization(request);
     if (!auth.authorized) return NextResponse.json({ error: auth.error }, { status: auth.status });
     const body = await readBody(request);
-    const { firstName, lastName, phone, email, notes } = body;
+    const { firstName, lastName, phone, email, notes, privacyConsent, marketingConsent } = body;
 
     if (!firstName || typeof firstName !== 'string' || !firstName.trim()) {
       throw new Error('TB_INVALID_REQUEST');
+    }
+    for (const value of [lastName, phone, email, notes]) {
+      if (value !== undefined && value !== null && typeof value !== 'string') {
+        throw new Error('TB_INVALID_REQUEST');
+      }
+    }
+    for (const value of [privacyConsent, marketingConsent]) {
+      if (value !== undefined && typeof value !== 'boolean') throw new Error('TB_INVALID_REQUEST');
     }
 
     const customer = await CustomerRepository.create({
@@ -53,6 +61,8 @@ export async function POST(request: NextRequest) {
       phone: typeof phone === 'string' && phone.trim() ? phone.trim() : null,
       email: typeof email === 'string' && email.trim() ? email.trim() : null,
       notes: typeof notes === 'string' ? notes.trim() : null,
+      privacyConsent: privacyConsent as boolean | undefined,
+      marketingConsent: marketingConsent as boolean | undefined,
     });
 
     return NextResponse.json(

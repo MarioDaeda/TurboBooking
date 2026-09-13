@@ -93,7 +93,7 @@ export interface CustomerRow {
 
 export interface InboundWebhookRow {
   id: string;
-  provider: 'ghl' | 'meta' | 'google' | 'stripe' | 'bettercallq';
+  provider: 'ghl' | 'meta' | 'google' | 'stripe';
   external_id: string | null;
   signature_valid: boolean;
   payload: Record<string, unknown>;

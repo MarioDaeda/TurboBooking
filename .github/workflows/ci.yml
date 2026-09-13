@@ -7,9 +7,13 @@ on:
       - 'backend/**'
       - 'fix/**'
       - 'feature/**'
+      - 'codex/**'
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
 
 jobs:
   test-and-build:

@@ -2,6 +2,7 @@
 
 import { StaffGate } from '@/components/auth/StaffGate';
 import { romeLocalToUtc } from '@/lib/romeTime';
+import { bookingSaveRequest } from '@/lib/bookingSaveRequest';
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { SectionId, Appointment, Client, ServiceItem, StaffMember, DaySchedule } from '@/types';
 import { mockVenues } from '@/data/mockData';
@@ -359,17 +360,11 @@ function Dashboard() {
     const idempotencyKey = pendingBookings.current.get(intent) ?? crypto.randomUUID();
     pendingBookings.current.set(intent, idempotencyKey);
 
-    const res = await fetch('/api/v1/bookings', {
-      method: 'POST',
+    const saveRequest = bookingSaveRequest(app, appointments.find(a => a.id === app.id), idempotencyKey);
+    const res = await fetch(saveRequest.url, {
+      method: saveRequest.method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        idempotencyKey,
-        customerId: app.clientId,
-        operatorId: app.staffId,
-        serviceId: app.serviceId,
-        startAt: startIso,
-        notes: app.notes || null,
-      }),
+      body: JSON.stringify(saveRequest.body),
     });
 
     const data = await res.json();

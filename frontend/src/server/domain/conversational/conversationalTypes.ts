@@ -7,7 +7,7 @@ import { TimeSlot } from '../booking/availabilityService';
 // =============================================================================
 
 export interface InboundMessageEvent {
-  provider: 'meta' | 'ghl' | 'bettercallq';
+  provider: 'meta' | 'ghl';
   channel: 'whatsapp' | 'instagram' | 'messenger' | 'sms' | 'voice';
   senderId: string;
   senderPhoneE164?: string;
