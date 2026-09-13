@@ -71,9 +71,9 @@ logs/
 *.tmp
 
 # ==========================================
-# Output generati (scripts/build_*.js) e screenshot di terzi
+# Output generati e screenshot di terzi
+# (TurboBooking.html è versionato: è la demo a file unico per i commerciali, npm run build:html)
 # ==========================================
-/TurboBooking.html
 /TurboBooking-Demo.html
 frontend/public/TurboBooking-Demo.html
 foto-treatwellpro/

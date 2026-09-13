@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint src",
     "test": "node --test tests/*.test.cjs tests/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:html": "node scripts/build-standalone-html.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -29,6 +30,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.25.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "postcss": "^8",
