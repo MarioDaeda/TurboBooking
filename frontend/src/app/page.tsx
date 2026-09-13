@@ -644,21 +644,21 @@ function Dashboard() {
           {currentSection === 'spedizioni' && <FornitoriView subSection="spedizioni" />}
 
           {currentSection === 'statistiche-andamento' && (
-            <StatisticheView subSection="andamento" />
+            <StatisticheView appointments={appointments} services={services} subSection="andamento" />
           )}
-          {currentSection === 'statistiche-azienda' && <StatisticheView subSection="azienda" />}
+          {currentSection === 'statistiche-azienda' && <StatisticheView appointments={appointments} services={services} subSection="azienda" />}
           {currentSection === 'statistiche-corrispettivi' && (
-            <StatisticheView subSection="corrispettivi" />
+            <StatisticheView appointments={appointments} services={services} subSection="corrispettivi" />
           )}
           {currentSection === 'statistiche-collaboratori' && (
-            <StatisticheView subSection="collaboratori" />
+            <StatisticheView appointments={appointments} services={services} subSection="collaboratori" />
           )}
-          {currentSection === 'statistiche-clienti' && <StatisticheView subSection="clienti" />}
+          {currentSection === 'statistiche-clienti' && <StatisticheView appointments={appointments} services={services} subSection="clienti" />}
           {currentSection === 'statistiche-magazzino' && (
-            <StatisticheView subSection="magazzino" />
+            <StatisticheView appointments={appointments} services={services} subSection="magazzino" />
           )}
           {currentSection === 'statistiche-inventario' && (
-            <StatisticheView subSection="inventario" />
+            <StatisticheView appointments={appointments} services={services} subSection="inventario" />
           )}
 
           {currentSection === 'recensioni' && <RecensioniView />}
