@@ -38,6 +38,7 @@ function loadAgent(overrides = {}) {
       },
     },
     '../../db/repositories': {
+      ServiceRepository: { searchBookableOnline: async () => [] },
       AppointmentRepository: {
         findHold: async (id) => ({
           id,
@@ -66,7 +67,7 @@ test('buildSystemInstruction uses Europe/Rome today date and warns about Rome lo
 
 test('controlla_disponibilita enriches UTC slots with Europe/Rome local time (hour and date)', async () => {
   const { runTool } = loadAgent();
-  const result = await runTool('controlla_disponibilita', { data: '2026-09-15' }, mockCustomerId);
+  const result = await runTool('controlla_disponibilita', { data: '2026-09-15', servizio_id: mockServiceId }, mockCustomerId);
   assert.equal(result.fuso_orario, 'Europe/Rome');
   assert.equal(result.totale_slot, 2);
 
@@ -81,6 +82,25 @@ test('controlla_disponibilita enriches UTC slots with Europe/Rome local time (ho
   assert.equal(slotWinter.ora_locale_inizio, '09:00');
   assert.equal(slotWinter.ora_locale_fine, '09:30');
   assert.equal(slotWinter.data_locale, '2026-01-15');
+});
+
+test('availability refuses a missing service and catalog search exposes only explicit matches', async () => {
+  let availabilityCalled = false;
+  const { runTool } = loadAgent({
+    '../booking/availabilityService': { AvailabilityService: { findAvailableSlots: async () => { availabilityCalled = true; return []; } } },
+    '../../db/repositories': {
+      AppointmentRepository: {},
+      ServiceRepository: { searchBookableOnline: async () => [{
+        id: mockServiceId, name: 'Taglio Uomo', description: null, category: 'Taglio', duration_minutes: 30, price: 30,
+      }] },
+    },
+  });
+  const missing = await runTool('controlla_disponibilita', { data: '2026-09-15' }, mockCustomerId);
+  assert.equal(missing.success, false);
+  assert.equal(availabilityCalled, false);
+  const catalog = await runTool('cerca_servizi', { query: 'taglio uomo' }, mockCustomerId);
+  assert.equal(catalog.totale, 1);
+  assert.equal(catalog.servizi[0].servizio_id, mockServiceId);
 });
 
 test('crea_evento converts customer Rome local time to UTC using romeLocalToUtc', async () => {

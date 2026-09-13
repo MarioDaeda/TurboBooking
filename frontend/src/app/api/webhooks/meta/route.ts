@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MetaSignature } from '@/server/integrations/meta/metaSignature';
 import { MetaWebhookParser } from '@/server/integrations/meta/metaWebhookParser';
-import { InboundWebhookRepository } from '@/server/db/repositories';
+import { InboundWebhookRepository, NotificationRepository } from '@/server/db/repositories';
 import { ConversationalAgentEngine } from '@/server/domain/conversational/conversationalAgentEngine';
 import { InboundMessageEvent } from '@/server/domain/conversational/conversationalTypes';
+import { MetaMediaClient } from '@/server/integrations/meta/metaMediaClient';
+import { ServiceMessageCounter } from '@/server/domain/messaging/serviceMessageCounter';
+import { createHash } from 'crypto';
 
 // =============================================================================
 // TURBOBOOKING - META WEBHOOK ROUTE HANDLER (WHATSAPP, INSTAGRAM, MESSENGER, ADS)
@@ -48,7 +51,10 @@ export async function POST(request: NextRequest) {
 
   // 2. Persistenza immediata in inbound_webhooks prima dell'elaborazione (§04.7)
   const normalizedMessages = MetaWebhookParser.parse(parsedJson);
-  const externalId = normalizedMessages[0]?.messageId || `meta_${Date.now()}`;
+  const normalizedStatuses = MetaWebhookParser.parseStatuses(parsedJson);
+  // Meta non fornisce un ID univoco della consegna webhook: l'hash del raw body
+  // deduplica retry identici senza confondere sent/delivered/read dello stesso messaggio.
+  const externalId = `meta_${createHash('sha256').update(rawBody).digest('hex')}`;
 
   const { record, isDuplicate } = await InboundWebhookRepository.save({
     provider: 'meta',
@@ -57,14 +63,32 @@ export async function POST(request: NextRequest) {
     payload: parsedJson,
   });
 
-  if (isDuplicate) {
+  if (isDuplicate && !record.error) {
     // Risponde 200/202 subito per fermare i retry del webhook provider
     return NextResponse.json({ status: 'already_processed' }, { status: 202 });
   }
 
-  // 3. Elaborazione asincrona attraverso l'unica logica di dominio (ConversationalAgentEngine)
+  // 3. Elaborazione attraverso l'unica logica di dominio (ancora sincrona finché non c'è una queue durabile)
   try {
+    for (const delivery of normalizedStatuses) {
+      await NotificationRepository.updateProviderStatus({
+        providerMessageId: delivery.messageId,
+        status: delivery.status,
+        error: delivery.error,
+      });
+      if (delivery.phoneNumberId) {
+        ServiceMessageCounter.record({
+          phoneNumberId: delivery.phoneNumberId,
+          messageId: delivery.messageId,
+          pricingCategory: delivery.pricingCategory,
+        });
+      }
+    }
+
     for (const msg of normalizedMessages) {
+      const media = msg.imageMediaId
+        ? await MetaMediaClient.fetchMediaAsBase64(msg.imageMediaId)
+        : null;
       const inboundEvent: InboundMessageEvent = {
         provider: 'meta',
         channel: msg.channel === 'leadgen' ? 'whatsapp' : msg.channel,
@@ -72,6 +96,8 @@ export async function POST(request: NextRequest) {
         senderPhoneE164: msg.senderPhoneE164,
         senderName: msg.senderName,
         text: msg.text,
+        imageBase64: media?.base64,
+        imageMimeType: media?.mimeType || msg.imageMimeType,
         timestamp: msg.timestamp,
         rawPayload: msg.rawPayload,
       };
@@ -83,8 +109,13 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await InboundWebhookRepository.markProcessed(record.id, errorMsg);
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 
   // Risposta rapida per rispettare il timeout Meta (< 3 secondi)
-  return NextResponse.json({ status: 'accepted', processed: normalizedMessages.length }, { status: 202 });
+  return NextResponse.json({
+    status: 'accepted',
+    processed: normalizedMessages.length,
+    deliveryStatuses: normalizedStatuses.length,
+  }, { status: 202 });
 }

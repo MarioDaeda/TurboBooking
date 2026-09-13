@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   getSupabaseAdminClient,
   BookingRow,
@@ -43,6 +43,40 @@ export const ServiceRepository = {
       throw Object.assign(new Error(`Errore durante il recupero dei servizi da Supabase: ${error.message}`), { code: error.code });
     }
 
+    return (data || []) as ServiceRow[];
+  },
+
+  async listBookableOnline(): Promise<ServiceRow[]> {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from('services')
+      .select('*')
+      .eq('active', true)
+      .eq('is_bookable_online', true)
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      throw Object.assign(new Error(`Errore durante il recupero dei servizi online: ${error.message}`), { code: error.code });
+    }
+    return (data || []) as ServiceRow[];
+  },
+
+  async searchBookableOnline(query: string): Promise<ServiceRow[]> {
+    const clean = query.trim().replace(/[^\p{L}\p{N}\s'-]/gu, ' ').trim();
+    if (!clean) return [];
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from('services')
+      .select('*')
+      .eq('active', true)
+      .eq('is_bookable_online', true)
+      .or(`name.ilike.%${clean}%,short_name.ilike.%${clean}%,description.ilike.%${clean}%,category.ilike.%${clean}%`)
+      .order('display_order', { ascending: true })
+      .limit(10);
+
+    if (error) {
+      throw Object.assign(new Error(`Errore durante la ricerca dei servizi online: ${error.message}`), { code: error.code });
+    }
     return (data || []) as ServiceRow[];
   },
 
@@ -912,6 +946,15 @@ export class TableNotMigratedError extends Error {
   }
 }
 
+function integrationTableError(tableName: string, error: { code?: string; message?: string }): Error {
+  if (error.code === '42P01' || error.message?.includes(`'${tableName}'`)) {
+    return new TableNotMigratedError(tableName);
+  }
+  return Object.assign(new Error(`Errore sulla tabella ${tableName}: ${error.message || 'errore sconosciuto'}`), {
+    code: error.code,
+  });
+}
+
 export const InboundWebhookRepository = {
   async save({
     provider,
@@ -927,12 +970,13 @@ export const InboundWebhookRepository = {
   }): Promise<{ record: InboundWebhookRow; isDuplicate: boolean }> {
     const supabase = getSupabaseAdminClient();
     const now = new Date().toISOString();
+    const stableExternalId = externalId || `payload_${createHash('sha256').update(JSON.stringify(payload)).digest('hex')}`;
     const id = randomUUID();
 
     const row: InboundWebhookRow = {
       id,
       provider,
-      external_id: externalId,
+      external_id: stableExternalId,
       signature_valid: signatureValid,
       payload,
       received_at: now,
@@ -946,8 +990,18 @@ export const InboundWebhookRepository = {
       .select()
       .single();
 
+    if (error?.code === '23505') {
+      const { data: existing, error: lookupError } = await supabase
+        .from('inbound_webhooks')
+        .select('*')
+        .eq('provider', provider)
+        .eq('external_id', stableExternalId)
+        .single();
+      if (lookupError) throw integrationTableError('inbound_webhooks', lookupError);
+      return { record: existing as InboundWebhookRow, isDuplicate: true };
+    }
     if (error) {
-      throw new TableNotMigratedError('inbound_webhooks');
+      throw integrationTableError('inbound_webhooks', error);
     }
 
     return { record: data as InboundWebhookRow, isDuplicate: false };
@@ -964,7 +1018,7 @@ export const InboundWebhookRepository = {
       .eq('id', id);
 
     if (updateError) {
-      throw new TableNotMigratedError('inbound_webhooks');
+      throw integrationTableError('inbound_webhooks', updateError);
     }
   },
 
@@ -977,7 +1031,7 @@ export const InboundWebhookRepository = {
       .limit(limit);
 
     if (error) {
-      throw new TableNotMigratedError('inbound_webhooks');
+      throw integrationTableError('inbound_webhooks', error);
     }
 
     return (data || []) as InboundWebhookRow[];
@@ -1000,7 +1054,7 @@ export const ExternalRefsRepository = {
       .maybeSingle();
 
     if (error) {
-      throw new TableNotMigratedError('external_refs');
+      throw integrationTableError('external_refs', error);
     }
 
     return (data as ExternalRefRow) || null;
@@ -1043,7 +1097,7 @@ export const ExternalRefsRepository = {
       .single();
 
     if (error) {
-      throw new TableNotMigratedError('external_refs');
+      throw integrationTableError('external_refs', error);
     }
 
     return (data as ExternalRefRow) || row;
@@ -1101,7 +1155,7 @@ export const NotificationRepository = {
       .single();
 
     if (insertError) {
-      throw new TableNotMigratedError('notification_messages');
+      throw integrationTableError('notification_messages', insertError);
     }
 
     return (data as NotificationMessageRow) || row;
@@ -1116,9 +1170,27 @@ export const NotificationRepository = {
       .limit(limit);
 
     if (error) {
-      throw new TableNotMigratedError('notification_messages');
+      throw integrationTableError('notification_messages', error);
     }
 
     return (data || []) as NotificationMessageRow[];
+  },
+
+  async updateProviderStatus({
+    providerMessageId,
+    status,
+    error,
+  }: {
+    providerMessageId: string;
+    status: 'sent' | 'delivered' | 'read' | 'failed';
+    error?: string | null;
+  }): Promise<void> {
+    const supabase = getSupabaseAdminClient();
+    const { error: updateError } = await supabase
+      .from('notification_messages')
+      .update({ status, error: error || null })
+      .eq('provider', 'direct_meta')
+      .eq('provider_message_id', providerMessageId);
+    if (updateError) throw integrationTableError('notification_messages', updateError);
   },
 };

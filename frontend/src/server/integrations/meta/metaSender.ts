@@ -9,6 +9,11 @@ export interface MetaSendResponseResult {
   error?: string;
 }
 
+function allowProviderMocks(): boolean {
+  return process.env.NODE_ENV === 'test' ||
+    (process.env.NODE_ENV !== 'production' && process.env.ALLOW_PROVIDER_MOCKS === 'true');
+}
+
 export const MetaSender = {
   /**
    * Invia un messaggio di testo diretto via WhatsApp Cloud API
@@ -23,8 +28,10 @@ export const MetaSender = {
     const token = process.env.META_WHATSAPP_TOKEN;
     const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
 
-    // Se non configurato o in ambiente di test, esegui fallback mock
     if (!token || !phoneNumberId || token.includes('your-')) {
+      if (!allowProviderMocks()) {
+        return { success: false, error: 'Meta WhatsApp non configurato' };
+      }
       return {
         success: true,
         messageId: `mock_wa_${Date.now()}`,
@@ -72,9 +79,12 @@ export const MetaSender = {
     recipientId: string;
     text: string;
   }): Promise<MetaSendResponseResult> {
-    const token = process.env.META_WHATSAPP_TOKEN; // In Graph API usa la Page Access Token
+    const token = process.env.META_PAGE_ACCESS_TOKEN || process.env.META_WHATSAPP_TOKEN;
 
     if (!token || token.includes('your-')) {
+      if (!allowProviderMocks()) {
+        return { success: false, error: 'Meta Graph non configurato' };
+      }
       return {
         success: true,
         messageId: `mock_graph_${Date.now()}`,

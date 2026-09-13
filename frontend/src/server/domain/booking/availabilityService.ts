@@ -83,12 +83,14 @@ export const AvailabilityService = {
     targetDate, // YYYY-MM-DD
     preferredStaffId,
     granularityMinutes = 15,
+    onlineOnly = false,
   }: {
     venueId?: string;
     serviceId?: string;
     targetDate?: string;
     preferredStaffId?: string;
     granularityMinutes?: number;
+    onlineOnly?: boolean;
   }): Promise<TimeSlot[]> {
     // 1. Invocazione preventiva di tb_expire_holds per liberare hold scaduti
     if (!Number.isInteger(granularityMinutes) || granularityMinutes < 5 || granularityMinutes > 120 ||
@@ -100,21 +102,12 @@ export const AvailabilityService = {
     const date = targetDate || getTodayInRome();
 
     // 2. Recupero del servizio da Supabase per conoscerne durata e prezzo
-    let service: ServiceRow | null = null;
-    if (serviceId) {
-      service = await ServiceRepository.getById(serviceId);
-      if (!service) throw new Error('TB_SERVICE_NOT_FOUND');
-    }
-    if (!service) {
-      // Compatibilità conversazionale: primo servizio solo quando serviceId è omesso
-      const services = await ServiceRepository.listActive();
-      if (services.length === 0) {
-        return [];
-      }
-      service = services[0];
-    }
+    if (!serviceId) throw new Error('TB_SERVICE_REQUIRED');
+    const service: ServiceRow | null = await ServiceRepository.getById(serviceId);
+    if (!service) throw new Error('TB_SERVICE_NOT_FOUND');
 
     if (!service.active) throw new Error('TB_SERVICE_INACTIVE');
+    if (onlineOnly && !service.is_bookable_online) throw new Error('TB_SERVICE_MANUAL_ONLY');
     const durationMinutes = service.duration_minutes;
     if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) throw new Error('TB_DURATION_INVALID');
     const durationMs = durationMinutes * 60 * 1000;
@@ -124,7 +117,9 @@ export const AvailabilityService = {
     const dayOfWeek = getRomeIsoDayOfWeek(date);
 
     // 4. Seleziona gli operatori target
-    let operators = await OperatorRepository.listActive();
+    let operators = onlineOnly
+      ? await OperatorRepository.listBookableOnline()
+      : await OperatorRepository.listActive();
     if (preferredStaffId) {
       operators = operators.filter((op) => op.id === preferredStaffId);
       if (!operators.length) throw new Error('TB_OPERATOR_NOT_FOUND');

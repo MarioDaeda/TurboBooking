@@ -5,8 +5,11 @@ const base={serviceId:id,targetDate:'2030-09-17'};
 function service(overrides={}) {
  const repositories={
   BookingRepository:{expireHolds:async()=>0,listOccupying:async()=>[]},
-  ServiceRepository:{getById:async()=>({id,name:'Taglio',active:true,duration_minutes:30,price:25})},
-  OperatorRepository:{listActive:async()=>[{id,name:'Staff',active:true}]},
+  ServiceRepository:{getById:async()=>({id,name:'Taglio',active:true,is_bookable_online:true,duration_minutes:30,price:25})},
+  OperatorRepository:{
+   listActive:async()=>[{id,name:'Staff',active:true,is_bookable_online:true}],
+   listBookableOnline:async()=>[{id,name:'Staff',active:true,is_bookable_online:true}],
+  },
   WorkingHoursRepository:{listActiveForDay:async()=>[{start_time:'09:00:00',end_time:'10:00:00'},{start_time:'14:00:00',end_time:'15:00:00'}]},
   BlockedPeriodRepository:{listOverlapping:async()=>[]},...overrides,
  };
@@ -31,6 +34,12 @@ test('expiry failures and unknown services/operators never silently fall back',a
  await assert.rejects(()=>service({BookingRepository:{expireHolds:async()=>{throw new Error('offline');}}}).findAvailableSlots(base),/offline/);
  await assert.rejects(()=>service({ServiceRepository:{getById:async()=>null}}).findAvailableSlots(base),/TB_SERVICE_NOT_FOUND/);
  await assert.rejects(()=>service().findAvailableSlots({...base,preferredStaffId:'20000000-0000-4000-8000-000000000001'}),/TB_OPERATOR_NOT_FOUND/);
+});
+test('service id is mandatory and manual-only services are rejected',async()=>{
+ await assert.rejects(()=>service().findAvailableSlots({targetDate:base.targetDate}),/TB_SERVICE_REQUIRED/);
+ const manual=service({ServiceRepository:{getById:async()=>({id,name:'Manuale',active:true,is_bookable_online:false,duration_minutes:30,price:25})}});
+ assert.ok((await manual.findAvailableSlots(base)).length > 0, 'la dashboard può vedere servizi manuali');
+ await assert.rejects(()=>manual.findAvailableSlots({...base,onlineOnly:true}),/TB_SERVICE_MANUAL_ONLY/);
 });
 test('Rome winter/summer offsets, midnight, spring gap and autumn fold',()=>{
  const {romeLocalToUtc}=load('src/lib/romeTime.ts');

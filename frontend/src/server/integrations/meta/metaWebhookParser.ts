@@ -10,11 +10,48 @@ export interface NormalizedMetaMessage {
   senderPhoneE164?: string;
   senderName?: string;
   text: string;
+  imageMediaId?: string;
+  imageMimeType?: string;
   timestamp: number;
   rawPayload: Record<string, unknown>;
 }
 
+export interface NormalizedMetaStatus {
+  messageId: string;
+  status: 'sent' | 'delivered' | 'read' | 'failed';
+  phoneNumberId?: string;
+  pricingCategory?: string;
+  error?: string;
+}
+
 export const MetaWebhookParser = {
+  parseStatuses(body: Record<string, unknown>): NormalizedMetaStatus[] {
+    const results: NormalizedMetaStatus[] = [];
+    const entries = Array.isArray(body.entry) ? body.entry : [];
+    for (const entry of entries) {
+      if (!Array.isArray(entry.changes)) continue;
+      for (const change of entry.changes) {
+        const value = change.value as Record<string, unknown> | undefined;
+        if (!value || !Array.isArray(value.statuses)) continue;
+        const metadata = value.metadata as Record<string, unknown> | undefined;
+        for (const item of value.statuses as Array<Record<string, unknown>>) {
+          const status = String(item.status || '');
+          if (!['sent', 'delivered', 'read', 'failed'].includes(status) || !item.id) continue;
+          const pricing = item.pricing as Record<string, unknown> | undefined;
+          const errors = Array.isArray(item.errors) ? item.errors as Array<Record<string, unknown>> : [];
+          results.push({
+            messageId: String(item.id),
+            status: status as NormalizedMetaStatus['status'],
+            phoneNumberId: metadata?.phone_number_id ? String(metadata.phone_number_id) : undefined,
+            pricingCategory: pricing?.category ? String(pricing.category) : undefined,
+            error: errors[0]?.title ? String(errors[0].title) : undefined,
+          });
+        }
+      }
+    }
+    return results;
+  },
+
   /**
    * Effettua il parsing del webhook di Meta e restituisce una lista di messaggi normalizzati
    */
@@ -49,7 +86,12 @@ export const MetaWebhookParser = {
                 text = msg.button.text;
               }
 
-              if (from && text) {
+              const imageMediaId = msg.type === 'image' && msg.image?.id ? String(msg.image.id) : undefined;
+              const imageMimeType = msg.type === 'image' && msg.image?.mime_type
+                ? String(msg.image.mime_type)
+                : undefined;
+
+              if (from && (text || imageMediaId)) {
                 results.push({
                   messageId: msgId,
                   channel: 'whatsapp',
@@ -57,6 +99,8 @@ export const MetaWebhookParser = {
                   senderPhoneE164: phoneE164,
                   senderName: profileName,
                   text: text.trim(),
+                  imageMediaId,
+                  imageMimeType,
                   timestamp: Number(msg.timestamp || Date.now() / 1000) * 1000,
                   rawPayload: msg,
                 });

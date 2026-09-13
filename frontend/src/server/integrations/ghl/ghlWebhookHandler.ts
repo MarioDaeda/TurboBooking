@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { verify } from 'crypto';
 import { GhlInboundContactDto } from './ghlContactMapper';
 
 // =============================================================================
@@ -26,28 +26,27 @@ export type GhlWebhookEvent =
 
 export const GhlWebhookHandler = {
   /**
-   * Verifica la firma HMAC del webhook GHL
+   * Verifica X-GHL-Signature (Ed25519) sul raw body, come da specifica HighLevel.
    */
   verifySignature(rawBody: string, signatureHeader?: string | null): boolean {
-    const secret = process.env.GHL_WEBHOOK_SECRET;
-    // In assenza di secret configurato in dev, accetta per test
-    if (!secret || secret.includes('your-')) {
-      return true;
-    }
+    const publicKey = process.env.GHL_WEBHOOK_PUBLIC_KEY || [
+      '-----BEGIN PUBLIC KEY-----',
+      'MCowBQYDK2VwAyEAi2HR1srL4o18O8BRa7gVJY7G7bupbN3H9AwJrHCDiOg=',
+      '-----END PUBLIC KEY-----',
+    ].join('\n');
 
     if (!signatureHeader) {
-      return false;
+      return process.env.NODE_ENV === 'test' ||
+        (process.env.NODE_ENV !== 'production' && process.env.ALLOW_INSECURE_WEBHOOKS === 'true');
     }
 
     try {
-      const hmac = createHmac('sha256', secret);
-      const digest = Buffer.from(hmac.update(rawBody).digest('hex'), 'utf8');
-      const signature = Buffer.from(signatureHeader, 'utf8');
-
-      if (digest.length !== signature.length) {
-        return false;
-      }
-      return timingSafeEqual(digest, signature);
+      return verify(
+        null,
+        Buffer.from(rawBody, 'utf8'),
+        publicKey,
+        Buffer.from(signatureHeader, 'base64')
+      );
     } catch {
       return false;
     }
@@ -58,12 +57,12 @@ export const GhlWebhookHandler = {
    */
   parsePayload(payload: Record<string, unknown>): GhlWebhookEvent {
     const eventType = (payload.type || payload.eventType || payload.event) as string;
-    const eventId = (payload.eventId || payload.id || `ghl_evt_${Date.now()}`) as string;
+    const eventId = (payload.eventId || payload.id) as string | undefined;
     const locationId = (payload.locationId || payload.location_id) as string | undefined;
 
     if (eventType === 'InboundMessage' || payload.messageType) {
       const msgData: GhlInboundMessageDto = {
-        messageId: (payload.messageId || payload.id || eventId) as string,
+        messageId: (payload.messageId || payload.id || '') as string,
         conversationId: (payload.conversationId || '') as string,
         locationId: locationId || '',
         contactId: (payload.contactId || '') as string,

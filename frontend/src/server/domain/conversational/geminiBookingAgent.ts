@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { romeLocalToUtc } from '../../../lib/romeTime';
 import { AvailabilityService } from '../booking/availabilityService';
-import { AppointmentRepository } from '../../db/repositories';
+import { AppointmentRepository, ServiceRepository } from '../../db/repositories';
 import {
   GeminiClient,
   GeminiContent,
@@ -20,6 +20,7 @@ const MAX_TOOL_ROUNDS = 6;
 const DEFAULT_DURATION_MINUTES = 45;
 
 export type BookingToolName =
+  | 'cerca_servizi'
   | 'controlla_disponibilita'
   | 'crea_evento'
   | 'modifica_prenotazione'
@@ -34,16 +35,27 @@ const sessions = new Map<string, AgentSession>();
 
 const TOOLS: GeminiFunctionDeclaration[] = [
   {
+    name: 'cerca_servizi',
+    description: 'Cerca nel catalogo i servizi attivi e prenotabili online. Usare prima della disponibilità quando non si conosce il servizio_id.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Nome o tipologia richiesta dal cliente, ad esempio "taglio uomo"' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'controlla_disponibilita',
-    description: 'Restituisce gli slot liberi per una data, opzionalmente per servizio e operatore.',
+    description: 'Restituisce gli slot liberi per una data e un servizio già identificato, opzionalmente per operatore.',
     parameters: {
       type: 'object',
       properties: {
         data: { type: 'string', description: 'Data richiesta in formato YYYY-MM-DD' },
-        servizio_id: { type: 'string', description: 'ID del servizio, se noto' },
+        servizio_id: { type: 'string', description: 'ID del servizio restituito da cerca_servizi' },
         staff_id: { type: 'string', description: "ID dell'operatore preferito, se indicato dal cliente" },
       },
-      required: ['data'],
+      required: ['data', 'servizio_id'],
     },
   },
   {
@@ -108,6 +120,7 @@ export function buildSystemInstruction(senderName?: string): string {
     `Oggi a Forlì è ${today}.${senderName ? ` Il cliente si chiama ${senderName}.` : ''}`,
     'Tutti gli orari per disponibilità e appuntamenti sono rigorosamente in ora locale italiana (Europe/Rome).',
     'Per disponibilità e prenotazioni usa SEMPRE le funzioni: non inventare orari, operatori o ID.',
+    'Identifica sempre il servizio con cerca_servizi prima di controlla_disponibilita. Se più risultati sono plausibili, chiedi al cliente di scegliere; non selezionare il primo servizio.',
     'Prima di crea_evento proponi gli slot restituiti da controlla_disponibilita (usa ora_locale_inizio e data_locale) e attendi la scelta del cliente.',
     "Se il cliente invia una foto (es. un taglio di riferimento), descrivila brevemente e usala per capire il servizio richiesto; non promettere risultati.",
     "Per richieste che non puoi gestire (reclami, prezzi personalizzati, urgenze) rispondi che un operatore del salone lo ricontatterà.",
@@ -124,11 +137,30 @@ export async function runTool(
   customerId: string
 ): Promise<Record<string, unknown>> {
   switch (name as BookingToolName) {
+    case 'cerca_servizi': {
+      const services = await ServiceRepository.searchBookableOnline(String(args.query || ''));
+      return {
+        totale: services.length,
+        servizi: services.map((service) => ({
+          servizio_id: service.id,
+          nome: service.name,
+          descrizione: service.description,
+          categoria: service.category,
+          durata_minuti: service.duration_minutes,
+          prezzo_euro: service.price,
+        })),
+        richiede_chiarimento: services.length !== 1,
+      };
+    }
     case 'controlla_disponibilita': {
+      if (!args.servizio_id) {
+        return { success: false, motivo: 'SERVIZIO_NON_IDENTIFICATO: usa cerca_servizi prima di controllare la disponibilità' };
+      }
       const rawSlots = await AvailabilityService.findAvailableSlots({
         targetDate: String(args.data),
         serviceId: args.servizio_id ? String(args.servizio_id) : undefined,
         preferredStaffId: args.staff_id ? String(args.staff_id) : undefined,
+        onlineOnly: true,
       });
 
       const romeFormatter = new Intl.DateTimeFormat('en-CA', {

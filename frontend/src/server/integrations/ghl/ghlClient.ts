@@ -27,7 +27,14 @@ export class GoHighLevelClient {
   }
 
   private isConfigured(): boolean {
-    return Boolean(this.clientId && this.clientSecret && !this.clientId.includes('your-'));
+    // Le chiamate Conversations/Contacts usano il location access token; le
+    // credenziali OAuth restano disponibili per il futuro flusso di installazione.
+    return Boolean(this.baseUrl);
+  }
+
+  private allowMocks(): boolean {
+    return process.env.NODE_ENV === 'test' ||
+      (process.env.NODE_ENV !== 'production' && process.env.ALLOW_PROVIDER_MOCKS === 'true');
   }
 
   /**
@@ -39,7 +46,7 @@ export class GoHighLevelClient {
     locationToken?: string
   ): Promise<{ contactId: string; isNew: boolean }> {
     if (!this.isConfigured() || !locationToken) {
-      // Simulazione mock
+      if (!this.allowMocks()) throw new Error('GHL non configurato: credenziali o location token mancanti');
       const mockId = `ghl_c_${Math.random().toString(36).substring(2, 9)}`;
       return { contactId: mockId, isNew: true };
     }
@@ -77,7 +84,7 @@ export class GoHighLevelClient {
     locationToken?: string
   ): Promise<{ messageId: string; status: 'sent' | 'queued' | 'failed' }> {
     if (!this.isConfigured() || !locationToken) {
-      // Mock invio riuscito
+      if (!this.allowMocks()) throw new Error('GHL non configurato: credenziali o location token mancanti');
       return {
         messageId: `ghl_msg_${Date.now()}`,
         status: 'sent',
@@ -115,6 +122,7 @@ export class GoHighLevelClient {
     locationToken?: string
   ): Promise<void> {
     if (!this.isConfigured() || !locationToken) {
+      if (!this.allowMocks()) throw new Error('GHL non configurato: credenziali o location token mancanti');
       return;
     }
 

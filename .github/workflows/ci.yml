@@ -39,6 +39,9 @@ jobs:
       - name: Run typecheck (tsc --noEmit)
         run: npm run typecheck
 
+      - name: Run lint
+        run: npm run lint
+
       - name: Run production build (next build)
         env:
           NEXT_TELEMETRY_DISABLED: 1

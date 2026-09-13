@@ -4,6 +4,7 @@ import { GhlContactMapper } from '@/server/integrations/ghl/ghlContactMapper';
 import { InboundWebhookRepository, CustomerRepository, ExternalRefsRepository } from '@/server/db/repositories';
 import { ConversationalAgentEngine } from '@/server/domain/conversational/conversationalAgentEngine';
 import { InboundMessageEvent } from '@/server/domain/conversational/conversationalTypes';
+import { createHash } from 'crypto';
 
 // =============================================================================
 // TURBOBOOKING - GOHIGHLEVEL WEBHOOK ROUTE HANDLER
@@ -12,13 +13,12 @@ import { InboundMessageEvent } from '@/server/domain/conversational/conversation
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
-  const signatureHeader =
-    request.headers.get('x-ghl-signature') || request.headers.get('x-leadconnector-signature');
+  const signatureHeader = request.headers.get('x-ghl-signature');
 
-  // 1. Verifica firma crittografica HMAC
+  // 1. Verifica firma Ed25519 corrente (il vecchio header RSA è dismesso)
   const isSignatureValid = GhlWebhookHandler.verifySignature(rawBody, signatureHeader);
   if (!isSignatureValid) {
-    return NextResponse.json({ error: 'Invalid GHL HMAC signature' }, { status: 403 });
+    return NextResponse.json({ error: 'Invalid GHL Ed25519 signature' }, { status: 403 });
   }
 
   let parsedJson: Record<string, unknown>;
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   }
 
   const parsedEvent = GhlWebhookHandler.parsePayload(parsedJson);
-  const externalId = parsedEvent.eventId || `ghl_${Date.now()}`;
+  const externalId = parsedEvent.eventId || `ghl_${createHash('sha256').update(rawBody).digest('hex')}`;
 
   // 2. Persistenza prima dell'elaborazione (§04.7)
   const { record, isDuplicate } = await InboundWebhookRepository.save({
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     payload: parsedJson,
   });
 
-  if (isDuplicate) {
+  if (isDuplicate && !record.error) {
     return NextResponse.json({ status: 'already_processed' }, { status: 202 });
   }
 
@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await InboundWebhookRepository.markProcessed(record.id, errorMsg);
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 
   return NextResponse.json({ status: 'accepted' }, { status: 202 });

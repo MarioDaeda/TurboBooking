@@ -28,6 +28,12 @@ test('SQL migrations, duration contract, ACL, idempotency, conflicts and expired
   }
   assert.equal((await db.query("select has_table_privilege('service_role','bookings','INSERT') as allowed")).rows[0].allowed,false);
   assert.equal((await db.query("select has_table_privilege('authenticated','staff_memberships','INSERT') as allowed")).rows[0].allowed,false);
+  for (const table of ['inbound_webhooks','external_refs','notification_messages']) {
+    const acl=(await db.query("select has_table_privilege('anon',$1,'SELECT') as anon,has_table_privilege('authenticated',$1,'SELECT') as authenticated,has_table_privilege('service_role',$1,'SELECT') as service_role",[table])).rows[0];
+    assert.deepEqual(acl,{anon:false,authenticated:false,service_role:true});
+  }
+  await db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload) values('meta','evt-1',true,'{}')");
+  await assert.rejects(()=>db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload) values('meta','evt-1',true,'{}')"),/inbound_webhooks_provider_external_id_key/);
   const op=(await db.query("insert into operators(name) values('Test') returning id")).rows[0].id;
   const service=(await db.query("insert into services(name,duration_minutes,price) values('Test',30,20) returning id")).rows[0].id;
   const customer=(await db.query("insert into customers(first_name) values('Test') returning id")).rows[0].id;

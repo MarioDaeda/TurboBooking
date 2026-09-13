@@ -41,7 +41,7 @@ export class GoHighLevelChannel implements NotificationChannel {
     locationToken?: string
   ) {
     this.kind = kind;
-    this.locationToken = locationToken;
+    this.locationToken = locationToken || process.env.GHL_LOCATION_TOKEN;
   }
 
   /**
@@ -90,7 +90,8 @@ export class GoHighLevelChannel implements NotificationChannel {
         messenger: 'FB',
       };
 
-      const locationId = msg.locationId || process.env.GHL_LOCATION_ID || 'default_location';
+      const locationId = msg.locationId || process.env.GHL_LOCATION_ID;
+      if (!locationId) throw new Error('GHL non configurato: location ID mancante');
       const result = await ghlClient.sendMessage(
         {
           locationId,
@@ -110,13 +111,13 @@ export class GoHighLevelChannel implements NotificationChannel {
         provider: 'ghl',
         toAddress: msg.recipientAddress,
         bodyPreview: msg.body,
-        status: 'sent',
+        status: result.status,
         providerMessageId: result.messageId,
         consentChecked: true,
       });
 
       return {
-        success: true,
+        success: result.status !== 'failed',
         messageId: result.messageId,
         channel: this.kind,
         provider: 'ghl',

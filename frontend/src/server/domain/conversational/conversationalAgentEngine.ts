@@ -1,5 +1,4 @@
-import { randomUUID } from 'crypto';
-import { CustomerRepository, ExternalRefsRepository } from '../../db/repositories';
+import { CustomerRepository, ExternalRefsRepository, NotificationRepository } from '../../db/repositories';
 import { CustomerRow } from '../../db/supabaseClient';
 import { AvailabilityService, TimeSlot } from '../booking/availabilityService';
 import {
@@ -63,20 +62,19 @@ export const ConversationalAgentEngine = {
       }
     } else {
       // Per canali social senza numero immediato (Instagram/Messenger ID)
-      const ref = await ExternalRefsRepository.getByExternalId('meta', 'customer', event.senderId);
+      const provider = event.provider === 'ghl' ? 'ghl' : 'meta';
+      const ref = await ExternalRefsRepository.getByExternalId(provider, 'customer', event.senderId);
       if (ref) {
-        customer = await CustomerRepository.findByPhone(`+390000000000`); // Placeholder o lookup
+        customer = await CustomerRepository.getById(ref.entity_id);
       }
       if (!customer) {
-        customer = await CustomerRepository.upsertFromExternal({
-          phoneE164: `+39${Math.floor(1000000000 + Math.random() * 9000000000)}`,
+        customer = await CustomerRepository.create({
           firstName: event.senderName || 'Utente Social',
           lastName: 'Direct',
-          privacyConsent: true,
-          marketingConsent: false,
+          phone: null,
         });
         await ExternalRefsRepository.upsertRef({
-          provider: 'meta',
+          provider,
           entityType: 'customer',
           entityId: customer.id,
           externalId: event.senderId,
@@ -97,6 +95,7 @@ export const ConversationalAgentEngine = {
 
       const lastTool = toolsCalled[toolsCalled.length - 1];
       const intentByTool: Record<string, ConversationIntent> = {
+        cerca_servizi: 'availability_query',
         controlla_disponibilita: 'availability_query',
         crea_evento: 'booking_confirm',
         modifica_prenotazione: 'booking_request',
@@ -170,43 +169,9 @@ export const ConversationalAgentEngine = {
       }
 
       case 'booking_request': {
-        // Cerca slot e crea subito un Hold a garanzia (§04.2: Nessuna conferma senza hold riuscito)
-        const targetDate = this.extractDateFromText(lower);
-        const slots = await AvailabilityService.findAvailableSlots({ targetDate });
-
-        if (slots.length > 0) {
-          const selectedSlot = slots[0];
-          const holdResult = await AvailabilityService.reserveHold({
-            customerId: customer.id,
-            staffId: selectedSlot.staffId,
-            serviceId: selectedSlot.serviceId,
-            startsAt: selectedSlot.startsAt,
-            endsAt: selectedSlot.endsAt,
-            idempotencyKey: randomUUID(),
-          });
-
-          if (holdResult.success && holdResult.hold) {
-            session.lastHoldId = holdResult.hold.id;
-            session.proposedSlots = slots;
-
-            const spokenTime = this.formatSpokenDate(selectedSlot.startsAt);
-            result = {
-              replyText: `Ho bloccato per te il posto con ${selectedSlot.staffName} per ${spokenTime}. Rispondi "Sì" o "Confermo" entro 7 minuti per bloccarlo definitivamente!`,
-              intent: 'booking_hold',
-              customer,
-              holdId: holdResult.hold.id,
-              suggestedSlots: slots,
-              escalatedToHuman: false,
-              requiresCustomerAction: true,
-            };
-            break;
-          }
-        }
-
         result = {
-          replyText:
-            'Al momento per quella data non ho trovato slot liberi con i requisiti richiesti. Vuoi che verifichi per il giorno successivo o preferisci parlare con la reception?',
-          intent: 'availability_query',
+          replyText: 'Quale trattamento desideri prenotare? Ho bisogno del servizio esatto prima di verificare gli orari.',
+          intent: 'booking_request',
           customer,
           escalatedToHuman: false,
           requiresCustomerAction: true,
@@ -215,37 +180,13 @@ export const ConversationalAgentEngine = {
       }
 
       case 'availability_query': {
-        const targetDate = this.extractDateFromText(lower);
-        const slots = await AvailabilityService.findAvailableSlots({ targetDate });
-        session.proposedSlots = slots;
-
-        if (slots.length === 0) {
-          result = {
-            replyText:
-              'Mi dispiace, non risultano disponibilità immediate per la data richiesta. Ti va bene un altro orario o preferisci che ti metta in contatto con il salone?',
-            intent: 'availability_query',
-            customer,
-            escalatedToHuman: false,
-            requiresCustomerAction: true,
-          };
-        } else {
-          const first = slots[0];
-          const second = slots[1];
-          const optionsText = second
-            ? `alle ${this.formatHour(first.startsAt)} con ${first.staffName} oppure alle ${this.formatHour(
-                second.startsAt
-              )} con ${second.staffName}`
-            : `alle ${this.formatHour(first.startsAt)} con ${first.staffName}`;
-
-          result = {
-            replyText: `Certamente ${customer.first_name}! Abbiamo posto ${optionsText}. Quale orario preferisci?`,
-            intent: 'availability_query',
-            customer,
-            suggestedSlots: slots,
-            escalatedToHuman: false,
-            requiresCustomerAction: true,
-          };
-        }
+        result = {
+          replyText: 'Per quale trattamento vuoi conoscere la disponibilità?',
+          intent: 'availability_query',
+          customer,
+          escalatedToHuman: false,
+          requiresCustomerAction: true,
+        };
         break;
       }
 
@@ -354,17 +295,30 @@ export const ConversationalAgentEngine = {
     customer: CustomerRow
   ): Promise<void> {
     if (event.provider === 'meta') {
+      let sendResult;
       if (event.channel === 'whatsapp' && event.senderPhoneE164) {
-        await MetaSender.sendWhatsAppText({
+        sendResult = await MetaSender.sendWhatsAppText({
           toPhone: event.senderPhoneE164,
           text: replyText,
         });
       } else {
-        await MetaSender.sendGraphMessage({
+        sendResult = await MetaSender.sendGraphMessage({
           recipientId: event.senderId,
           text: replyText,
         });
       }
+      await NotificationRepository.log({
+        customerId: customer.id,
+        channel: event.channel === 'voice' ? 'whatsapp' : event.channel,
+        provider: 'direct_meta',
+        toAddress: event.senderPhoneE164 || event.senderId,
+        bodyPreview: replyText,
+        status: sendResult.success ? 'sent' : 'failed',
+        providerMessageId: sendResult.messageId,
+        error: sendResult.error,
+        consentChecked: true,
+      });
+      if (!sendResult.success) throw new Error(sendResult.error || 'Invio Meta fallito');
     } else if (event.provider === 'ghl') {
       const channel = new GoHighLevelChannel(
         (event.channel as 'sms' | 'email' | 'whatsapp' | 'instagram' | 'messenger') || 'whatsapp'

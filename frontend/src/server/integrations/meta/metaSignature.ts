@@ -18,8 +18,9 @@ export const MetaSignature = {
     const expectedToken = process.env.META_VERIFY_TOKEN;
 
     if (mode === 'subscribe') {
-      // In dev, se non è impostato accetta qualunque stringa purché non vuota
-      if (!expectedToken || expectedToken.includes('your-')) {
+      if ((!expectedToken || expectedToken.includes('your-')) &&
+          (process.env.NODE_ENV === 'test' ||
+            (process.env.NODE_ENV !== 'production' && process.env.ALLOW_INSECURE_WEBHOOKS === 'true'))) {
         return { isValid: true, challenge };
       }
 
@@ -38,9 +39,9 @@ export const MetaSignature = {
   verifyPayloadSignature(rawBody: string, signatureHeader?: string | null): boolean {
     const appSecret = process.env.META_APP_SECRET;
 
-    // Se l'app secret non è configurato in ambiente di sviluppo, consente il transito
     if (!appSecret || appSecret.includes('your-')) {
-      return true;
+      return process.env.NODE_ENV === 'test' ||
+        (process.env.NODE_ENV !== 'production' && process.env.ALLOW_INSECURE_WEBHOOKS === 'true');
     }
 
     if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {

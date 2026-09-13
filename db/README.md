@@ -14,6 +14,7 @@ operativo e non va eseguito. Il backend dei booking usa `customers`, `operators`
 | `0001b_booking_prerequisites.sql` | Prerequisiti v1.1 ricostruiti per installazioni nuove: catalogo, hold, idempotenza, lock, trigger, RPC e privilegi |
 | `0002_turbobooking_v1_2_durate.sql` | Copia integrale della v1.2 validata, incluso test facoltativo commentato |
 | `0003_staff_memberships.sql` | Associazione esplicita `auth.users.id` → operatore attivo; lettura server-only |
+| `0004_integrations.sql` | Tabelle server-only per webhook idempotenti, riferimenti provider e notifiche |
 
 Il testo originale completo della v1.1 non era disponibile: `0001b` è una nuova
 implementazione dei prerequisiti, **non un export del database remoto**.
@@ -39,8 +40,8 @@ psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f db/seeds/01_seed_initial_data.sql
 Il seed è la copia di `turbobooking_seed_reali.sql`: 40 servizi, Gianluca e Sara,
 turni di Gianluca 09:00–19:00 martedì–sabato. Gli operatori nuovi restano
 prenotabili manualmente; l'abilitazione online deve essere esplicita.
-Le tabelle delle integrazioni legacy (notifiche, webhook, external_refs) non
-sono incluse in questo schema di booking.
+Le tabelle operative delle integrazioni sono aggiunte in modo incrementale da
+`0004_integrations.sql`; il vecchio schema multi-tenant resta solo un documento.
 
 Questa repository usa script `db/migrations`, non contiene un progetto Supabase
 CLI inizializzato: `supabase db push/reset` da soli non applicano questi file.
@@ -48,7 +49,7 @@ CLI inizializzato: `supabase db push/reset` da soli non applicano questi file.
 ## Progetto esistente già alla v1.2 validata
 
 **Non rieseguire `0001`, `0001a`, `0001b`, `0002` o il seed.**
-Applicare soltanto `0003_staff_memberships.sql` una volta; quindi:
+Applicare `0003_staff_memberships.sql` e `0004_integrations.sql` una volta; quindi:
 
 1. Creare o individuare l'utente staff in Supabase Authentication.
 2. Come amministratore, inserire il suo UUID reale e l'UUID dell'operatore:

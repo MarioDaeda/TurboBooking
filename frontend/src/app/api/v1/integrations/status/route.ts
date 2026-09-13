@@ -17,23 +17,30 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   let isSupabaseConnected = false;
   let supabaseDetails = '';
+  let integrationTablesReady = false;
+  let integrationError: string | null = null;
 
   try {
     const auth = await verifyStaffAuthorization(request);
     if (!auth.authorized) return NextResponse.json({ error: auth.error }, { status: auth.status });
     const supabase = getSupabaseAdminClient();
-    isSupabaseConnected = Boolean(supabase);
-    supabaseDetails = 'Connesso a Supabase PostgreSQL 16 con client server-only';
+    const { error } = await supabase.from('services').select('id').limit(1);
+    if (error) throw error;
+    isSupabaseConnected = true;
+    supabaseDetails = 'Query Supabase completata con client server-only';
   } catch (err: unknown) {
     return apiError(err);
   }
 
   const isGhlConfigured = Boolean(
-    process.env.GHL_CLIENT_ID && !process.env.GHL_CLIENT_ID.includes('your-')
+    process.env.GHL_LOCATION_ID && process.env.GHL_LOCATION_TOKEN
   );
 
   const isMetaConfigured = Boolean(
-    process.env.META_VERIFY_TOKEN && !process.env.META_VERIFY_TOKEN.includes('your-')
+    process.env.META_VERIFY_TOKEN && !process.env.META_VERIFY_TOKEN.includes('your-') &&
+    process.env.META_APP_SECRET && !process.env.META_APP_SECRET.includes('your-') &&
+    process.env.META_WHATSAPP_TOKEN && !process.env.META_WHATSAPP_TOKEN.includes('your-') &&
+    process.env.META_WHATSAPP_PHONE_NUMBER_ID
   );
 
   let recentWebhooks: InboundWebhookRow[] = [];
@@ -42,19 +49,26 @@ export async function GET(request: NextRequest) {
     try {
       recentWebhooks = await InboundWebhookRepository.listRecent(10);
       recentNotifications = await NotificationRepository.listRecent(10);
-    } catch {
-      // Tabella non ancora presente
+      integrationTablesReady = true;
+    } catch (err: unknown) {
+      integrationError = err instanceof Error ? err.message : String(err);
     }
   }
 
+  const overallHealthy = isSupabaseConnected && integrationTablesReady;
+
   return NextResponse.json({
-    status: isSupabaseConnected ? 'healthy' : 'degraded',
+    status: overallHealthy ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     providers: {
       supabase: {
         connected: isSupabaseConnected,
         mode: isSupabaseConnected ? 'production_db' : 'unconfigured_error',
         details: supabaseDetails,
+      },
+      integrationStorage: {
+        ready: integrationTablesReady,
+        error: integrationError,
       },
       ghl: {
         configured: isGhlConfigured,
