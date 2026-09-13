@@ -10,9 +10,41 @@ test('SQL migrations, duration contract, ACL, idempotency, conflicts and expired
   await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);');
   const files=fs.readdirSync(new URL('migrations/',root)).filter(x=>x.endsWith('.sql')).sort();
   for(const file of files) {
+   if (file === '0010_supabase_remote_sync.sql') {
+    // Reproduce real Supabase defaults/drift, not just a pristine PostgreSQL ACL.
+    await db.exec(`GRANT ALL ON public.inbound_webhooks, public.external_refs,
+      public.notification_messages, public.processed_provider_events,
+      public.staff_memberships TO PUBLIC, anon, authenticated, service_role;
+      ALTER TABLE public.processed_provider_events DISABLE ROW LEVEL SECURITY;`);
+   }
    try {await db.exec(fs.readFileSync(new URL('migrations/'+file,root),'utf8'));}
    catch(e){throw new Error(`Migration ${file}: ${e.message}`,{cause:e});}
   }
+  // Reapplying the forward reconciliation on an already aligned DB is safe.
+  await db.exec(fs.readFileSync(new URL('migrations/0010_supabase_remote_sync.sql',root),'utf8'));
+  for (const table of ['inbound_webhooks','external_refs','notification_messages','processed_provider_events','staff_memberships']) {
+    assert.equal((await db.query('select relrowsecurity from pg_class where oid=$1::regclass',[table])).rows[0].relrowsecurity,true);
+    for (const role of ['anon','authenticated','service_role']) {
+      for (const privilege of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) {
+        const allowed=role==='service_role' && (privilege==='SELECT' || (table!=='staff_memberships' && ['INSERT','UPDATE'].includes(privilege)));
+        assert.equal((await db.query('select has_table_privilege($1,$2,$3) as allowed',[role,table,privilege])).rows[0].allowed,allowed,`${role} ${table} ${privilege}`);
+      }
+    }
+  }
+  for (const name of ['tb_claim_provider_event','tb_redact_expired_inbound_webhooks']) {
+    assert.equal((await db.query('select prosecdef from pg_proc where proname=$1',[name])).rows[0].prosecdef,false);
+  }
+  for (const [table,column] of [['notification_messages','customer_id'],['notification_messages','appointment_id'],['staff_memberships','operator_id']]) {
+    assert.ok((await db.query(`select 1 from pg_index i join pg_attribute a
+      on a.attrelid=i.indrelid and a.attnum=i.indkey[0]
+      where i.indrelid=$1::regclass and a.attname=$2 and i.indisvalid`,[table,column])).rows.length);
+  }
+  await assert.rejects(()=>db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload) values('bettercallq','legacy',true,'{}')"),/inbound_webhooks_provider_check/);
+  await db.exec('SET ROLE service_role');
+  assert.equal((await db.query("select tb_claim_provider_event('meta','message','service-role-event') as claimed")).rows[0].claimed,true);
+  assert.equal((await db.query("select tb_claim_provider_event('meta','message','service-role-event') as claimed")).rows[0].claimed,false);
+  await assert.rejects(()=>db.query('DELETE FROM processed_provider_events'),/permission denied/);
+  await db.exec('RESET ROLE');
   const migration=fs.readFileSync(new URL('migrations/0002_turbobooking_v1_2_durate.sql',root),'utf8');
   const optional=migration.split('/* TEST FACOLTATIVO:')[1];
   await db.exec(optional.slice(optional.indexOf('BEGIN;'),optional.lastIndexOf('*/')));

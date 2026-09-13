@@ -20,6 +20,7 @@ operativo e non va eseguito. Il backend dei booking usa `customers`, `operators`
 | `0007_integration_retention.sql` | Scadenza e redazione automatica dei payload raw webhook |
 | `0008_provider_event_idempotency.sql` | Claim atomico per messaggi e delivery status dei provider |
 | `0009_integration_retention_cron.sql` | Backfill retention e schedulazione giornaliera con `pg_cron`, se disponibile |
+| `0010_supabase_remote_sync.sql` | Riconciliazione forward: RLS, privilegi minimi, funzioni invoker, indici FK e provider supportati |
 
 Il testo originale completo della v1.1 non era disponibile: `0001b` è una nuova
 implementazione dei prerequisiti, **non un export del database remoto**.
@@ -46,7 +47,7 @@ Il seed è la copia di `turbobooking_seed_reali.sql`: 40 servizi, Gianluca e Sar
 turni di Gianluca 09:00–19:00 martedì–sabato. Gli operatori nuovi restano
 prenotabili manualmente; l'abilitazione online deve essere esplicita.
 Le tabelle operative delle integrazioni sono aggiunte in modo incrementale da
-`0004_integrations.sql` a `0009_integration_retention_cron.sql`; il vecchio schema
+`0004_integrations.sql` a `0010_supabase_remote_sync.sql`; il vecchio schema
 multi-tenant resta solo un documento.
 La funzione `public.tb_redact_expired_inbound_webhooks()` viene pianificata ogni
 giorno alle 03:15 dalla migrazione `0009` quando `pg_cron` è disponibile. Se
@@ -82,6 +83,43 @@ VALUES ('<UUID_UTENTE_AUTH>', '<UUID_OPERATORE>');
 Se il database usa la precedente `0002` errata di questo branch anziché la v1.2
 validata, non applicare alla cieca questa sequenza: i tipi e le firme RPC sono
 diversi. Serve una migrazione incrementale basata sullo schema effettivo.
+
+## Riconciliazione dopo gli interventi manuali su Supabase
+
+Su un database che possiede già tutti gli oggetti di `0003`–`0009`, applicare
+solo `0010_supabase_remote_sync.sql` come amministratore. Non rieseguire le
+migrazioni storiche né i seed. `0010` è riapplicabile e non contiene associazioni
+fra account reali e operatori. Non corregge automaticamente una migration history
+remota divergente: confrontare gli oggetti esistenti prima di applicarla.
+
+La migrazione revoca anche i privilegi preesistenti di `service_role`, poi
+concede SELECT/INSERT/UPDATE alle quattro tabelle integrazione e solo SELECT a
+`staff_memberships`. Le due RPC integrazione diventano SECURITY INVOKER:
+continuano a funzionare con `service_role` (BYPASSRLS), senza aumentare i suoi
+privilegi. Le tabelle restano server-only, senza policy per i client.
+
+In presenza di webhook storici con provider non più supportati, l'intera `0010`
+si interrompe e viene annullata: nessun evento viene eliminato o rinominato.
+Occorre concordare una migrazione/archiviazione di quei dati prima di riprovare.
+
+Verifiche post-applicazione (SQL Editor amministratore):
+
+```sql
+SELECT relname, relrowsecurity FROM pg_class
+WHERE oid IN ('public.inbound_webhooks'::regclass, 'public.external_refs'::regclass,
+  'public.notification_messages'::regclass, 'public.processed_provider_events'::regclass,
+  'public.staff_memberships'::regclass);
+SELECT proname, prosecdef FROM pg_proc
+WHERE proname IN ('tb_claim_provider_event', 'tb_redact_expired_inbound_webhooks');
+SELECT grantee, table_name, privilege_type FROM information_schema.role_table_grants
+WHERE table_schema = 'public' AND table_name IN
+  ('inbound_webhooks', 'external_refs', 'notification_messages', 'processed_provider_events', 'staff_memberships')
+ORDER BY table_name, grantee, privilege_type;
+```
+
+I test locali simulano grant iniziali eccessivi e verificano RLS, revoche,
+indici, esecuzione RPC come `service_role` e riapplicazione. Non attestano lo
+stato del progetto Supabase remoto, che va controllato separatamente.
 
 ## Contratto API e verifiche
 
