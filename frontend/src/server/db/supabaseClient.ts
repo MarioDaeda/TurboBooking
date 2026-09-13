@@ -82,10 +82,13 @@ export interface CustomerRow {
   created_at?: string;
   updated_at?: string;
 
-  // Campi ausiliari per compatibilità TypeScript
+  has_privacy_consent: boolean;
+  marketing_consent: boolean;
+  privacy_consent_at?: string | null;
+  marketing_consent_at?: string | null;
+
+  // Campo ausiliario per compatibilità TypeScript
   phone_e164?: string;
-  has_privacy_consent?: boolean;
-  marketing_consent?: boolean;
 }
 
 export interface InboundWebhookRow {
@@ -97,6 +100,9 @@ export interface InboundWebhookRow {
   received_at: string;
   processed_at: string | null;
   error: string | null;
+  processing_status: 'pending' | 'processing' | 'processed' | 'failed';
+  processing_started_at: string | null;
+  retention_expires_at: string | null;
 }
 
 export interface ExternalRefRow {

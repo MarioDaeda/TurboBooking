@@ -7,6 +7,7 @@ import { InboundMessageEvent } from '@/server/domain/conversational/conversation
 import { MetaMediaClient } from '@/server/integrations/meta/metaMediaClient';
 import { ServiceMessageCounter } from '@/server/domain/messaging/serviceMessageCounter';
 import { createHash } from 'crypto';
+import { MetaLeadHandler } from '@/server/integrations/meta/metaLeadHandler';
 
 // =============================================================================
 // TURBOBOOKING - META WEBHOOK ROUTE HANDLER (WHATSAPP, INSTAGRAM, MESSENGER, ADS)
@@ -63,9 +64,12 @@ export async function POST(request: NextRequest) {
     payload: parsedJson,
   });
 
-  if (isDuplicate && !record.error) {
-    // Risponde 200/202 subito per fermare i retry del webhook provider
-    return NextResponse.json({ status: 'already_processed' }, { status: 202 });
+  const claimed = await InboundWebhookRepository.claimForProcessing(record.id);
+  if (!claimed) {
+    if (isDuplicate && record.processed_at !== null && record.error === null) {
+      return NextResponse.json({ status: 'already_processed' }, { status: 202 });
+    }
+    return NextResponse.json({ status: 'processing_in_progress' }, { status: 202 });
   }
 
   // 3. Elaborazione attraverso l'unica logica di dominio (ancora sincrona finché non c'è una queue durabile)
@@ -86,12 +90,16 @@ export async function POST(request: NextRequest) {
     }
 
     for (const msg of normalizedMessages) {
+      if (msg.channel === 'leadgen') {
+        await MetaLeadHandler.process(msg);
+        continue;
+      }
       const media = msg.imageMediaId
         ? await MetaMediaClient.fetchMediaAsBase64(msg.imageMediaId)
         : null;
       const inboundEvent: InboundMessageEvent = {
         provider: 'meta',
-        channel: msg.channel === 'leadgen' ? 'whatsapp' : msg.channel,
+        channel: msg.channel,
         senderId: msg.senderId,
         senderPhoneE164: msg.senderPhoneE164,
         senderName: msg.senderName,
@@ -108,7 +116,7 @@ export async function POST(request: NextRequest) {
     await InboundWebhookRepository.markProcessed(record.id);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    await InboundWebhookRepository.markProcessed(record.id, errorMsg);
+    await InboundWebhookRepository.markFailed(record.id, errorMsg);
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 

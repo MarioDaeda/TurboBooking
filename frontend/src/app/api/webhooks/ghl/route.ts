@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GhlWebhookHandler } from '@/server/integrations/ghl/ghlWebhookHandler';
+import { GhlWebhookHandler, normalizeGhlChannel } from '@/server/integrations/ghl/ghlWebhookHandler';
 import { GhlContactMapper } from '@/server/integrations/ghl/ghlContactMapper';
 import { InboundWebhookRepository, CustomerRepository, ExternalRefsRepository } from '@/server/db/repositories';
 import { ConversationalAgentEngine } from '@/server/domain/conversational/conversationalAgentEngine';
@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
   }
 
   const parsedEvent = GhlWebhookHandler.parsePayload(parsedJson);
-  const externalId = parsedEvent.eventId || `ghl_${createHash('sha256').update(rawBody).digest('hex')}`;
+  const externalId = parsedEvent.eventId ||
+    (parsedEvent.type === 'InboundMessage' ? parsedEvent.data.messageId || undefined : undefined) ||
+    `ghl_${createHash('sha256').update(rawBody).digest('hex')}`;
 
   // 2. Persistenza prima dell'elaborazione (§04.7)
   const { record, isDuplicate } = await InboundWebhookRepository.save({
@@ -39,25 +41,26 @@ export async function POST(request: NextRequest) {
     payload: parsedJson,
   });
 
-  if (isDuplicate && !record.error) {
-    return NextResponse.json({ status: 'already_processed' }, { status: 202 });
+  const claimed = await InboundWebhookRepository.claimForProcessing(record.id);
+  if (!claimed) {
+    if (isDuplicate && record.processed_at !== null && record.error === null) {
+      return NextResponse.json({ status: 'already_processed' }, { status: 202 });
+    }
+    return NextResponse.json({ status: 'processing_in_progress' }, { status: 202 });
   }
-
   // 3. Routing di dominio
   try {
     if (parsedEvent.type === 'InboundMessage') {
       const msg = parsedEvent.data;
-      const channelMap: Record<string, InboundMessageEvent['channel']> = {
-        SMS: 'sms',
-        WhatsApp: 'whatsapp',
-        IG: 'instagram',
-        FB: 'messenger',
-        Email: 'sms',
-      };
+      const channel = normalizeGhlChannel(msg.messageType);
+      if (!channel) {
+        await InboundWebhookRepository.markProcessed(record.id);
+        return NextResponse.json({ status: 'ignored_unsupported_channel' }, { status: 202 });
+      }
 
       const inboundEvent: InboundMessageEvent = {
         provider: 'ghl',
-        channel: channelMap[msg.messageType] || 'whatsapp',
+        channel,
         senderId: msg.contactId,
         senderPhoneE164: msg.phone,
         text: msg.body,
@@ -89,7 +92,7 @@ export async function POST(request: NextRequest) {
     await InboundWebhookRepository.markProcessed(record.id);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    await InboundWebhookRepository.markProcessed(record.id, errorMsg);
+    await InboundWebhookRepository.markFailed(record.id, errorMsg);
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 

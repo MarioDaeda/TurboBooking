@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
     process.env.META_WHATSAPP_TOKEN && !process.env.META_WHATSAPP_TOKEN.includes('your-') &&
     process.env.META_WHATSAPP_PHONE_NUMBER_ID
   );
+  const isMetaLeadAdsConfigured = Boolean(
+    process.env.META_PAGE_ACCESS_TOKEN && !process.env.META_PAGE_ACCESS_TOKEN.includes('your-')
+  );
 
   let recentWebhooks: InboundWebhookRow[] = [];
   let recentNotifications: NotificationMessageRow[] = [];
@@ -56,6 +59,10 @@ export async function GET(request: NextRequest) {
   }
 
   const overallHealthy = isSupabaseConnected && integrationTablesReady;
+  const sanitizedWebhooks = recentWebhooks.map(({ payload: _payload, ...webhook }) => ({
+    ...webhook,
+    payloadSummary: { keys: Object.keys(_payload || {}) },
+  }));
 
   return NextResponse.json({
     status: overallHealthy ? 'healthy' : 'degraded',
@@ -78,14 +85,19 @@ export async function GET(request: NextRequest) {
       meta: {
         configured: isMetaConfigured,
         webhookUrl: '/api/webhooks/meta',
-        features: ['whatsapp_cloud_api', 'instagram_direct', 'messenger', 'lead_ads', 'conversational_ai'],
+        features: ['whatsapp_cloud_api', 'instagram_direct', 'messenger', 'conversational_ai'],
+        leadAds: {
+          configured: isMetaLeadAdsConfigured,
+          status: isMetaLeadAdsConfigured ? 'configured' : 'not_configured',
+          pipeline: 'lead_ads_to_customer',
+        },
       },
     },
     metrics: {
       totalRecentWebhooks: recentWebhooks.length,
       totalRecentNotifications: recentNotifications.length,
     },
-    recentWebhooks,
+    recentWebhooks: sanitizedWebhooks,
     recentNotifications,
   });
 }

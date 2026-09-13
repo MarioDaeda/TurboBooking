@@ -9,6 +9,7 @@ import {
 import { MetaSender } from '../../integrations/meta/metaSender';
 import { GoHighLevelChannel } from '../../integrations/ghl/ghlNotificationChannel';
 import { GeminiBookingAgent } from './geminiBookingAgent';
+import { formatRomeDateTime, getRomeToday } from '../../../lib/romeTime';
 
 // =============================================================================
 // TURBOBOOKING - CONVERSATIONAL AGENT ENGINE ("UNA SOLA LOGICA")
@@ -125,7 +126,24 @@ export const ConversationalAgentEngine = {
 
     let result: ConversationalAgentResult;
 
-    switch (intent) {
+    // GHL è un adapter CRM/trasporto: il percorso di booking conversazionale
+    // richiede ancora lo state machine Gemini di WhatsApp Meta. Evitiamo quindi
+    // di promettere una prenotazione automatica su GHL e passiamo alla reception.
+    if (
+      event.provider === 'ghl' &&
+      ['booking_request', 'availability_query', 'booking_confirm', 'booking_cancel'].includes(intent)
+    ) {
+      result = {
+        replyText:
+          'Per prenotazioni e modifiche ti metto in contatto con la reception: un operatore ti ricontatterà a breve.',
+        intent: 'human_escalation',
+        customer,
+        escalatedToHuman: true,
+        requiresCustomerAction: false,
+      };
+    } else {
+
+      switch (intent) {
       case 'human_escalation': {
         result = {
           replyText:
@@ -212,6 +230,7 @@ export const ConversationalAgentEngine = {
           requiresCustomerAction: true,
         };
         break;
+      }
       }
     }
 
@@ -321,17 +340,19 @@ export const ConversationalAgentEngine = {
       if (!sendResult.success) throw new Error(sendResult.error || 'Invio Meta fallito');
     } else if (event.provider === 'ghl') {
       const channel = new GoHighLevelChannel(
-        (event.channel as 'sms' | 'email' | 'whatsapp' | 'instagram' | 'messenger') || 'whatsapp'
+        event.channel as 'sms' | 'email' | 'whatsapp' | 'instagram' | 'messenger'
       );
-      await channel.send(
+      const receipt = await channel.send(
         {
           recipientAddress: event.senderPhoneE164 || event.senderId,
+          contactId: event.senderId,
           body: replyText,
           isTransactional: true,
           locationId: event.locationId,
         },
         customer
       );
+      if (!receipt.success) throw new Error(receipt.error || 'Invio GHL fallito');
     }
   },
 
@@ -340,30 +361,8 @@ export const ConversationalAgentEngine = {
    */
   formatSpokenDate(isoDate: string): string {
     try {
-      const date = new Date(isoDate);
-      const days = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
-      const months = [
-        'gennaio',
-        'febbraio',
-        'marzo',
-        'aprile',
-        'maggio',
-        'giugno',
-        'luglio',
-        'agosto',
-        'settembre',
-        'ottobre',
-        'novembre',
-        'dicembre',
-      ];
-
-      const dayName = days[date.getDay()];
-      const dayNum = date.getDate();
-      const monthName = months[date.getMonth()];
-      const hours = String(date.getUTCHours()).padStart(2, '0');
-      const mins = String(date.getUTCMinutes()).padStart(2, '0');
-
-      return `${dayName} ${dayNum} ${monthName} alle ore ${hours}:${mins}`;
+      const formatted = formatRomeDateTime(isoDate);
+      return `${formatted.weekday} ${formatted.day} ${formatted.month} alle ore ${formatted.time}`;
     } catch {
       return isoDate;
     }
@@ -371,17 +370,14 @@ export const ConversationalAgentEngine = {
 
   formatHour(isoDate: string): string {
     try {
-      const date = new Date(isoDate);
-      const hours = String(date.getUTCHours()).padStart(2, '0');
-      const mins = String(date.getUTCMinutes()).padStart(2, '0');
-      return `${hours}:${mins}`;
+      return formatRomeDateTime(isoDate).time;
     } catch {
       return '15:30';
     }
   },
 
   extractDateFromText(text: string): string {
-    const today = new Date();
+    const today = new Date(`${getRomeToday()}T12:00:00+01:00`);
     if (text.includes('domani')) {
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);

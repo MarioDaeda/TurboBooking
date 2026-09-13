@@ -12,3 +12,61 @@ export function romeLocalToUtc(date: string, time: string): Date {
   }
   throw new Error('TB_START_INVALID: orario locale inesistente');
 }
+
+const ROME_DATE_PARTS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Rome',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Return today's calendar date in the business timezone. */
+export function getRomeToday(now = new Date()): string {
+  const parts = Object.fromEntries(
+    ROME_DATE_PARTS.formatToParts(now).map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/** Format an instant using the Europe/Rome business timezone. */
+export function formatRomeDateTime(isoDate: string): {
+  date: string;
+  time: string;
+  weekday: string;
+  day: number;
+  month: string;
+} {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) throw new Error('TB_INVALID_DATE');
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('it-IT', {
+      timeZone: 'Europe/Rome',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value])
+  );
+  const calendarParts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value])
+  );
+  return {
+    date: `${calendarParts.year}-${calendarParts.month}-${calendarParts.day}`,
+    time: `${parts.hour}:${parts.minute}`,
+    weekday: parts.weekday,
+    day: Number(parts.day),
+    month: parts.month,
+  };
+}

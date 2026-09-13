@@ -15,6 +15,9 @@ operativo e non va eseguito. Il backend dei booking usa `customers`, `operators`
 | `0002_turbobooking_v1_2_durate.sql` | Copia integrale della v1.2 validata, incluso test facoltativo commentato |
 | `0003_staff_memberships.sql` | Associazione esplicita `auth.users.id` → operatore attivo; lettura server-only |
 | `0004_integrations.sql` | Tabelle server-only per webhook idempotenti, riferimenti provider e notifiche |
+| `0005_customer_consents.sql` | Consensi privacy/marketing persistiti sul cliente |
+| `0006_webhook_processing_state.sql` | Stato pending/processing/processed/failed e reclaim dei job bloccati |
+| `0007_integration_retention.sql` | Scadenza e redazione automatica dei payload raw webhook |
 
 Il testo originale completo della v1.1 non era disponibile: `0001b` è una nuova
 implementazione dei prerequisiti, **non un export del database remoto**.
@@ -41,7 +44,11 @@ Il seed è la copia di `turbobooking_seed_reali.sql`: 40 servizi, Gianluca e Sar
 turni di Gianluca 09:00–19:00 martedì–sabato. Gli operatori nuovi restano
 prenotabili manualmente; l'abilitazione online deve essere esplicita.
 Le tabelle operative delle integrazioni sono aggiunte in modo incrementale da
-`0004_integrations.sql`; il vecchio schema multi-tenant resta solo un documento.
+`0004_integrations.sql` a `0007_integration_retention.sql`; il vecchio schema
+multi-tenant resta solo un documento.
+La funzione `public.tb_redact_expired_inbound_webhooks()` va invocata ogni giorno
+da un job amministrativo/Supabase Cron con il ruolo `service_role`: redige il
+payload oltre 30 giorni e conserva stato, firma, errore e timestamp del webhook.
 
 Questa repository usa script `db/migrations`, non contiene un progetto Supabase
 CLI inizializzato: `supabase db push/reset` da soli non applicano questi file.
@@ -49,7 +56,7 @@ CLI inizializzato: `supabase db push/reset` da soli non applicano questi file.
 ## Progetto esistente già alla v1.2 validata
 
 **Non rieseguire `0001`, `0001a`, `0001b`, `0002` o il seed.**
-Applicare `0003_staff_memberships.sql` e `0004_integrations.sql` una volta; quindi:
+Applicare `0003_staff_memberships.sql` e le migrazioni `0004`–`0007` una volta; quindi:
 
 1. Creare o individuare l'utente staff in Supabase Authentication.
 2. Come amministratore, inserire il suo UUID reale e l'UUID dell'operatore:

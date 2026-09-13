@@ -18,6 +18,15 @@ test('Meta signatures fail closed in production and validate HMAC-SHA256', () =>
   if (previous.secret === undefined) delete process.env.META_APP_SECRET; else process.env.META_APP_SECRET = previous.secret;
 });
 
+test('Rome timezone helpers are the single calendar/formatting source', () => {
+  const { formatRomeDateTime, getRomeToday } = load('src/lib/romeTime.ts');
+  assert.equal(getRomeToday(new Date('2026-01-15T23:30:00Z')), '2026-01-16');
+  const formatted = formatRomeDateTime('2026-01-15T14:30:00Z');
+  assert.equal(formatted.date, '2026-01-15');
+  assert.equal(formatted.time, '15:30');
+  assert.equal(formatted.weekday, 'giovedì');
+});
+
 test('GHL verifies X-GHL-Signature with Ed25519 and rejects missing signatures', () => {
   const previous = { nodeEnv: process.env.NODE_ENV, key: process.env.GHL_WEBHOOK_PUBLIC_KEY };
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
@@ -31,6 +40,28 @@ test('GHL verifies X-GHL-Signature with Ed25519 and rejects missing signatures',
   assert.equal(GhlWebhookHandler.verifySignature(body, null), false);
   if (previous.nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous.nodeEnv;
   if (previous.key === undefined) delete process.env.GHL_WEBHOOK_PUBLIC_KEY; else process.env.GHL_WEBHOOK_PUBLIC_KEY = previous.key;
+});
+
+test('GHL parser keeps provider webhook/message ids and rejects unknown channels', () => {
+  const { GhlWebhookHandler, normalizeGhlChannel } = load('src/server/integrations/ghl/ghlWebhookHandler.ts');
+  const event = GhlWebhookHandler.parsePayload({
+    type: 'InboundMessage',
+    id: 'contact-id-must-not-be-used-as-event-id',
+    webhookId: 'webhook-1',
+    contactId: 'contact-1',
+    messageId: 'message-1',
+    messageType: 'Email',
+    body: 'ciao',
+  });
+  assert.equal(event.eventId, 'webhook-1');
+  assert.equal(event.data.messageId, 'message-1');
+  const create = GhlWebhookHandler.parsePayload({ type: 'ContactCreate', webhookId: 'delivery-create', id: 'contact-1' });
+  const update = GhlWebhookHandler.parsePayload({ type: 'ContactUpdate', webhookId: 'delivery-update', id: 'contact-1' });
+  assert.notEqual(create.eventId, update.eventId);
+  assert.equal(normalizeGhlChannel('sms'), 'sms');
+  assert.equal(normalizeGhlChannel('ig'), 'instagram');
+  assert.equal(normalizeGhlChannel('Email'), null);
+  assert.equal(normalizeGhlChannel('unknown'), null);
 });
 
 test('Meta parser preserves image media and delivery statuses', () => {
@@ -68,6 +99,109 @@ test('webhook repository treats provider/external_id conflicts as duplicates', a
   const result = await InboundWebhookRepository.save({ provider: 'meta', externalId: 'evt-1', signatureValid: true, payload: {} });
   assert.equal(result.isDuplicate, true);
   assert.equal(result.record.id, 'existing');
+});
+
+test('webhook repository claims pending work and does not reprocess completed work', async () => {
+  let state = 'pending';
+  let previousState = state;
+  const row = { id: 'webhook-1', processing_status: 'pending' };
+  const query = {
+    update(patch) { previousState = state; if (patch.processing_status) state = patch.processing_status; return this; },
+    eq() { return this; },
+    in() { return this; },
+    lt() { return this; },
+    select() { return this; },
+    async maybeSingle() {
+      if (previousState === 'pending') return { data: { ...row, processing_status: 'processing' }, error: null };
+      return { data: null, error: null };
+    },
+  };
+  const { InboundWebhookRepository } = load('src/server/db/repositories.ts', {
+    './supabaseClient': { getSupabaseAdminClient: () => ({ from: () => query }) },
+  });
+  assert.equal((await InboundWebhookRepository.claimForProcessing('webhook-1')).processing_status, 'processing');
+  state = 'processed';
+  assert.equal(await InboundWebhookRepository.claimForProcessing('webhook-1'), null);
+});
+
+test('customer creation persists privacy and marketing consent separately', async () => {
+  let inserted;
+  const fakeCustomer = { id: 'customer-1', first_name: 'Mario', last_name: 'Rossi', phone: '+39123', email: null, has_privacy_consent: true, marketing_consent: false };
+  const customers = {
+    insert(row) { inserted = row; return this; },
+    select() { return this; },
+    async single() { return { data: fakeCustomer, error: null }; },
+  };
+  const { CustomerRepository } = load('src/server/db/repositories.ts', {
+    './supabaseClient': { getSupabaseAdminClient: () => ({ from: () => customers }) },
+  });
+  await CustomerRepository.create({ firstName: 'Mario', lastName: 'Rossi', phone: '+39123', privacyConsent: true, marketingConsent: false });
+  assert.equal(inserted.has_privacy_consent, true);
+  assert.equal(inserted.marketing_consent, false);
+  assert.ok(inserted.privacy_consent_at);
+  assert.equal(inserted.marketing_consent_at, null);
+});
+
+test('GHL channel routes fields per channel and blocks missing consent', async () => {
+  const logs = [];
+  let sent;
+  const { GoHighLevelChannel } = load('src/server/integrations/ghl/ghlNotificationChannel.ts', {
+    '../../db/repositories': { NotificationRepository: { log: async entry => logs.push(entry) } },
+    './ghlClient': { ghlClient: { sendMessage: async params => { sent = params; return { messageId: 'msg-1', status: 'sent' }; } } },
+  });
+  const customer = { id: 'customer-1', has_privacy_consent: true, marketing_consent: false };
+  const receipt = await new GoHighLevelChannel('email').send({ recipientAddress: 'mario@example.test', subject: 'Conferma', body: 'ok', isTransactional: true, locationId: 'loc-1' }, customer);
+  assert.equal(receipt.success, true);
+  assert.equal(sent.type, 'Email');
+  assert.equal(sent.email, 'mario@example.test');
+  assert.equal(sent.phone, undefined);
+  const rejected = await new GoHighLevelChannel('sms').send({ recipientAddress: '+39123', body: 'promo', isTransactional: false, locationId: 'loc-1' }, customer);
+  assert.equal(rejected.success, false);
+  assert.equal(logs.at(-1).status, 'rejected_no_consent');
+  const noPrivacy = await new GoHighLevelChannel('sms').send({ recipientAddress: '+39123', body: 'conferma', isTransactional: true, locationId: 'loc-1' }, { ...customer, has_privacy_consent: false });
+  assert.equal(noPrivacy.success, false);
+});
+
+test('GHL outbound failure is propagated by the conversational engine', async () => {
+  const { ConversationalAgentEngine } = load('src/server/domain/conversational/conversationalAgentEngine.ts', {
+    '../../db/repositories': { NotificationRepository: { log: async () => {} } },
+    '../../integrations/meta/metaSender': { MetaSender: {} },
+    '../../integrations/ghl/ghlNotificationChannel': {
+      GoHighLevelChannel: class { async send() { return { success: false, error: 'provider down' }; } },
+    },
+    '../booking/availabilityService': { AvailabilityService: {} },
+    './geminiBookingAgent': { GeminiBookingAgent: {} },
+  });
+  await assert.rejects(
+    () => ConversationalAgentEngine.dispatchOutboundReply(
+      { provider: 'ghl', channel: 'sms', senderId: 'contact-1', text: 'ciao', timestamp: 1, rawPayload: {} },
+      'risposta',
+      { id: 'customer-1', first_name: 'Mario', has_privacy_consent: true, marketing_consent: false }
+    ),
+    /provider down/
+  );
+});
+
+test('Meta Lead Ads uses a dedicated customer handler, not the conversation engine', async () => {
+  let upserted;
+  let ref;
+  const { MetaLeadHandler } = load('src/server/integrations/meta/metaLeadHandler.ts', {
+    '../../db/repositories': {
+      CustomerRepository: { upsertFromExternal: async input => { upserted = input; return { id: 'customer-1' }; } },
+      ExternalRefsRepository: { upsertRef: async input => { ref = input; } },
+    },
+  });
+  const previous = process.env.META_PAGE_ACCESS_TOKEN;
+  delete process.env.META_PAGE_ACCESS_TOKEN;
+  await MetaLeadHandler.process({
+    messageId: 'lead-1', channel: 'leadgen', senderId: 'lead-1', text: 'lead', timestamp: 1,
+    rawPayload: { leadgen_id: 'lead-1', field_data: [{ field_name: 'full_name', values: ['Mario Rossi'] }, { field_name: 'phone_number', values: ['+39123'] }] },
+  });
+  assert.equal(upserted.firstName, 'Mario');
+  assert.equal(upserted.privacyConsent, true);
+  assert.equal(upserted.marketingConsent, false);
+  assert.equal(ref.externalId, 'lead-1');
+  if (previous === undefined) delete process.env.META_PAGE_ACCESS_TOKEN; else process.env.META_PAGE_ACCESS_TOKEN = previous;
 });
 
 test('social contacts are created with null phone and linked by external ref', async () => {

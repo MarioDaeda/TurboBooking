@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { romeLocalToUtc } from '../../../lib/romeTime';
+import { getRomeToday, romeLocalToUtc } from '../../../lib/romeTime';
 import { AvailabilityService } from '../booking/availabilityService';
 import { AppointmentRepository, ServiceRepository } from '../../db/repositories';
 import {
@@ -100,17 +100,7 @@ const TOOLS: GeminiFunctionDeclaration[] = [
 ];
 
 export function getRomeTodayDate(): string {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Rome',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-      .formatToParts(new Date())
-      .map((p) => [p.type, p.value])
-  );
-  return `${parts.year}-${parts.month}-${parts.day}`;
+  return getRomeToday();
 }
 
 export function buildSystemInstruction(senderName?: string): string {

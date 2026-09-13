@@ -1,6 +1,20 @@
 import { verify } from 'crypto';
 import { GhlInboundContactDto } from './ghlContactMapper';
 
+export type GhlInboundChannel = 'sms' | 'whatsapp' | 'instagram' | 'messenger';
+
+export function normalizeGhlChannel(messageType: string): GhlInboundChannel | null {
+  switch (messageType.trim().toLowerCase()) {
+    case 'sms': return 'sms';
+    case 'whatsapp': return 'whatsapp';
+    case 'ig':
+    case 'instagram': return 'instagram';
+    case 'fb':
+    case 'messenger': return 'messenger';
+    default: return null;
+  }
+}
+
 // =============================================================================
 // TURBOBOOKING - GHL WEBHOOK HANDLER
 // Verifica firma HMAC e normalizza eventi di contatto e messaggistica inbound
@@ -13,7 +27,7 @@ export interface GhlInboundMessageDto {
   contactId: string;
   phone?: string;
   email?: string;
-  messageType: 'SMS' | 'WhatsApp' | 'IG' | 'FB' | 'Email';
+  messageType: string;
   body: string;
   direction: 'inbound' | 'outbound';
   attachments?: string[];
@@ -57,18 +71,18 @@ export const GhlWebhookHandler = {
    */
   parsePayload(payload: Record<string, unknown>): GhlWebhookEvent {
     const eventType = (payload.type || payload.eventType || payload.event) as string;
-    const eventId = (payload.eventId || payload.id) as string | undefined;
+    const eventId = (payload.webhookId || payload.webhook_id || payload.eventId || payload.event_id) as string | undefined;
     const locationId = (payload.locationId || payload.location_id) as string | undefined;
 
     if (eventType === 'InboundMessage' || payload.messageType) {
       const msgData: GhlInboundMessageDto = {
-        messageId: (payload.messageId || payload.id || '') as string,
+        messageId: (payload.messageId || payload.message_id || '') as string,
         conversationId: (payload.conversationId || '') as string,
         locationId: locationId || '',
         contactId: (payload.contactId || '') as string,
         phone: (payload.phone || payload.from) as string | undefined,
         email: payload.email as string | undefined,
-        messageType: ((payload.messageType as string) || 'WhatsApp') as GhlInboundMessageDto['messageType'],
+        messageType: String(payload.messageType || payload.message_type || ''),
         body: (payload.body || payload.message || payload.text || '') as string,
         direction: 'inbound',
         attachments: Array.isArray(payload.attachments) ? (payload.attachments as string[]) : undefined,

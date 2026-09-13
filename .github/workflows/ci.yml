@@ -5,10 +5,11 @@ on:
     branches:
       - main
       - 'backend/**'
+      - 'fix/**'
+      - 'feature/**'
   pull_request:
     branches:
       - main
-      - 'backend/**'
 
 jobs:
   test-and-build:
@@ -35,6 +36,9 @@ jobs:
 
       - name: Run tests (node:test)
         run: npm test
+
+      - name: Generate Next route types
+        run: npx next typegen
 
       - name: Run typecheck (tsc --noEmit)
         run: npm run typecheck

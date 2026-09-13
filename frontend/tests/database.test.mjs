@@ -33,10 +33,21 @@ test('SQL migrations, duration contract, ACL, idempotency, conflicts and expired
     assert.deepEqual(acl,{anon:false,authenticated:false,service_role:true});
   }
   await db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload) values('meta','evt-1',true,'{}')");
+  const webhookState=(await db.query("select processing_status,retention_expires_at from inbound_webhooks where external_id='evt-1'")).rows[0];
+  assert.equal(webhookState.processing_status,'pending');
+  assert.ok(webhookState.retention_expires_at);
+  await db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload,retention_expires_at) values('meta','evt-retention',true,'{\"email\":\"secret@example.test\"}',clock_timestamp()-interval '1 minute')");
+  await db.exec('SET ROLE service_role');
+  assert.equal((await db.query('select public.tb_redact_expired_inbound_webhooks() as n')).rows[0].n,1);
+  const redacted=(await db.query("select payload,retention_expires_at from public.inbound_webhooks where external_id='evt-retention'")).rows[0];
+  assert.deepEqual(redacted,{payload:{},retention_expires_at:null});
+  await db.exec('RESET ROLE');
   await assert.rejects(()=>db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload) values('meta','evt-1',true,'{}')"),/inbound_webhooks_provider_external_id_key/);
   const op=(await db.query("insert into operators(name) values('Test') returning id")).rows[0].id;
   const service=(await db.query("insert into services(name,duration_minutes,price) values('Test',30,20) returning id")).rows[0].id;
-  const customer=(await db.query("insert into customers(first_name) values('Test') returning id")).rows[0].id;
+  const customerRow=(await db.query("insert into customers(first_name,has_privacy_consent,marketing_consent) values('Test',true,false) returning id,has_privacy_consent,marketing_consent,privacy_consent_at")).rows[0];
+  assert.deepEqual({has_privacy_consent:customerRow.has_privacy_consent,marketing_consent:customerRow.marketing_consent}, {has_privacy_consent:true,marketing_consent:false});
+  const customer=customerRow.id;
   await db.query("insert into working_hours(operator_id,day_of_week,start_time,end_time) values($1,2,'09:00','12:00'),($1,2,'14:00','19:00')",[op]);
   const start='2030-09-17T08:00:00Z';
   const create=(key,hold=false,at=start,notes=null)=>db.query("select tb_create_booking($1,$2,$3,$4,'dashboard',$5,$6,$7) as b",[customer,op,service,at,key,hold,notes]);

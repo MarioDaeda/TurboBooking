@@ -12,6 +12,7 @@ export interface OutboundMessage {
   customerId?: string;
   appointmentId?: string;
   recipientAddress: string; // Telefono o Email
+  contactId?: string;
   subject?: string;
   body: string;
   isTransactional: boolean; // true = promemoria/conferma, false = marketing
@@ -89,19 +90,21 @@ export class GoHighLevelChannel implements NotificationChannel {
         instagram: 'IG',
         messenger: 'FB',
       };
+      const messageType = ghlTypeMap[this.kind];
+      if (!messageType) throw new Error(`Canale GHL non supportato: ${this.kind}`);
 
       const locationId = msg.locationId || process.env.GHL_LOCATION_ID;
       if (!locationId) throw new Error('GHL non configurato: location ID mancante');
-      const result = await ghlClient.sendMessage(
-        {
-          locationId,
-          phone: msg.recipientAddress,
-          type: ghlTypeMap[this.kind] || 'WhatsApp',
-          message: msg.body,
-          subject: msg.subject,
-        },
-        this.locationToken
-      );
+      const params: Parameters<typeof ghlClient.sendMessage>[0] = {
+        locationId,
+        type: messageType,
+        message: msg.body,
+        subject: msg.subject,
+      };
+      if (this.kind === 'email') params.email = msg.recipientAddress;
+      else if (this.kind === 'sms' || this.kind === 'whatsapp') params.phone = msg.recipientAddress;
+      else params.contactId = msg.contactId || msg.recipientAddress;
+      const result = await ghlClient.sendMessage(params, this.locationToken);
 
       await NotificationRepository.log({
         orgId: msg.organizationId,

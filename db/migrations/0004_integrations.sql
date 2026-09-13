@@ -1,6 +1,8 @@
 -- Tabelle operative per webhook, riferimenti provider e notifiche.
 -- Sono server-only: anon/authenticated non hanno accesso diretto; il backend usa service_role.
 
+BEGIN;
+
 CREATE TABLE public.inbound_webhooks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   provider text NOT NULL CHECK (provider IN ('ghl', 'meta', 'google', 'stripe', 'bettercallq')),
@@ -72,3 +74,5 @@ REVOKE ALL ON TABLE public.notification_messages FROM PUBLIC, anon, authenticate
 GRANT SELECT, INSERT, UPDATE ON TABLE public.inbound_webhooks TO service_role;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.external_refs TO service_role;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.notification_messages TO service_role;
+
+COMMIT;

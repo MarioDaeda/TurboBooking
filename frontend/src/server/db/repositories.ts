@@ -312,12 +312,16 @@ export const CustomerRepository = {
     phone,
     email,
     notes,
+    privacyConsent,
+    marketingConsent,
   }: {
     firstName: string;
     lastName?: string | null;
     phone?: string | null;
     email?: string | null;
     notes?: string | null;
+    privacyConsent?: boolean;
+    marketingConsent?: boolean;
   }): Promise<CustomerRow> {
     const supabase = getSupabaseAdminClient();
     const now = new Date().toISOString();
@@ -328,6 +332,10 @@ export const CustomerRepository = {
       phone: phone || null,
       email: email || null,
       notes: notes || null,
+      has_privacy_consent: privacyConsent ?? false,
+      marketing_consent: marketingConsent ?? false,
+      privacy_consent_at: privacyConsent ? now : null,
+      marketing_consent_at: marketingConsent ? now : null,
       created_at: now,
       updated_at: now,
     };
@@ -358,6 +366,8 @@ export const CustomerRepository = {
     lastName,
     email,
     notes,
+    privacyConsent,
+    marketingConsent,
   }: {
     phoneE164: string;
     firstName: string;
@@ -378,15 +388,24 @@ export const CustomerRepository = {
 
     if (matches.length === 1) {
       const existing = matches[0];
+      const patch: Record<string, unknown> = {
+        first_name: existing.first_name || firstName,
+        last_name: existing.last_name || lastName,
+        email: existing.email || email || null,
+        notes: existing.notes || notes || null,
+        updated_at: now,
+      };
+      if (privacyConsent !== undefined) {
+        patch.has_privacy_consent = privacyConsent;
+        patch.privacy_consent_at = privacyConsent ? existing.privacy_consent_at || now : null;
+      }
+      if (marketingConsent !== undefined) {
+        patch.marketing_consent = marketingConsent;
+        patch.marketing_consent_at = marketingConsent ? existing.marketing_consent_at || now : null;
+      }
       const { data, error } = await supabase
         .from('customers')
-        .update({
-          first_name: existing.first_name || firstName,
-          last_name: existing.last_name || lastName,
-          email: existing.email || email || null,
-          notes: existing.notes || notes || null,
-          updated_at: now,
-        })
+        .update(patch)
         .eq('id', existing.id)
         .select()
         .single();
@@ -407,6 +426,8 @@ export const CustomerRepository = {
       phone: phoneE164,
       email,
       notes,
+      privacyConsent,
+      marketingConsent,
     });
   },
 };
@@ -933,8 +954,8 @@ export const AppointmentRepository = {
 
 // =============================================================================
 // 5. INBOUND WEBHOOKS, EXTERNAL REFS, NOTIFICATIONS
-// NOTA: Queste tabelle non sono state create dalle migrazioni attuali.
-// NON devono simulare un salvataggio riuscito: sollevano un errore esplicito.
+// Le tabelle sono server-only e vengono create dalle migrazioni 0004–0007.
+// In caso di database non aggiornato l'errore resta esplicito, senza fallback.
 // =============================================================================
 
 export class TableNotMigratedError extends Error {
@@ -982,6 +1003,9 @@ export const InboundWebhookRepository = {
       received_at: now,
       processed_at: null,
       error: null,
+      processing_status: 'pending',
+      processing_started_at: null,
+      retention_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     };
 
     const { data, error } = await supabase
@@ -1008,18 +1032,69 @@ export const InboundWebhookRepository = {
   },
 
   async markProcessed(id: string, error?: string): Promise<void> {
+    if (error) {
+      await this.markFailed(id, error);
+      return;
+    }
     const supabase = getSupabaseAdminClient();
     const { error: updateError } = await supabase
       .from('inbound_webhooks')
       .update({
         processed_at: new Date().toISOString(),
-        error: error || null,
+        error: null,
+        processing_status: 'processed',
+        processing_started_at: null,
       })
       .eq('id', id);
 
     if (updateError) {
       throw integrationTableError('inbound_webhooks', updateError);
     }
+  },
+
+  async claimForProcessing(id: string): Promise<InboundWebhookRow | null> {
+    const supabase = getSupabaseAdminClient();
+    const now = new Date().toISOString();
+    const staleBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    type ClaimQuery = {
+      eq(column: string, value: string): ClaimQuery;
+      in(column: string, values: string[]): ClaimQuery;
+      lt(column: string, value: string): ClaimQuery;
+      select(columns?: string): ClaimQuery;
+      maybeSingle(): Promise<{ data: InboundWebhookRow | null; error: { code?: string; message?: string } | null }>;
+    };
+
+    const claim = async (applyFilters: (query: ClaimQuery) => ClaimQuery) => applyFilters(
+      supabase.from('inbound_webhooks').update({
+        processing_status: 'processing',
+        processing_started_at: now,
+      }) as unknown as ClaimQuery
+    ).select().maybeSingle();
+
+    const first = await claim(
+      (query) => query.eq('id', id).in('processing_status', ['pending', 'failed'])
+    );
+    if (first.error) throw integrationTableError('inbound_webhooks', first.error);
+    if (first.data) return first.data as InboundWebhookRow;
+
+    const reclaim = await claim(
+      (query) => query
+        .eq('id', id)
+        .eq('processing_status', 'processing')
+        .lt('processing_started_at', staleBefore)
+    );
+    if (reclaim.error) throw integrationTableError('inbound_webhooks', reclaim.error);
+    return (reclaim.data as InboundWebhookRow) || null;
+  },
+
+  async markFailed(id: string, error: string): Promise<void> {
+    const supabase = getSupabaseAdminClient();
+    const { error: updateError } = await supabase
+      .from('inbound_webhooks')
+      .update({ processing_status: 'failed', processing_started_at: null, processed_at: null, error })
+      .eq('id', id);
+    if (updateError) throw integrationTableError('inbound_webhooks', updateError);
   },
 
   async listRecent(limit: number = 20): Promise<InboundWebhookRow[]> {
@@ -1035,6 +1110,13 @@ export const InboundWebhookRepository = {
     }
 
     return (data || []) as InboundWebhookRow[];
+  },
+
+  async redactExpiredPayloads(): Promise<number> {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase.rpc('tb_redact_expired_inbound_webhooks');
+    if (error) throw integrationTableError('inbound_webhooks', error);
+    return typeof data === 'number' ? data : 0;
   },
 };
 
