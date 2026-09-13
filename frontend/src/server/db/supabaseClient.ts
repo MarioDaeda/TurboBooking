@@ -105,6 +105,19 @@ export interface InboundWebhookRow {
   retention_expires_at: string | null;
 }
 
+export interface ProcessedProviderEventRow {
+  id: string;
+  provider: string;
+  event_type: string;
+  external_id: string;
+  processing_status: 'processing' | 'processed' | 'failed';
+  processing_started_at: string | null;
+  processed_at: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ExternalRefRow {
   id: string;
   provider: 'ghl' | 'meta' | 'google' | 'stripe';
@@ -165,6 +178,7 @@ export interface DatabaseSchema {
   working_hours: WorkingHoursRow;
   blocked_periods: BlockedPeriodRow;
   inbound_webhooks: InboundWebhookRow;
+  processed_provider_events: ProcessedProviderEventRow;
   external_refs: ExternalRefRow;
   notification_messages: NotificationMessageRow;
 }

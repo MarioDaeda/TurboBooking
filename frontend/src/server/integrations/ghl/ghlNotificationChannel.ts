@@ -93,17 +93,16 @@ export class GoHighLevelChannel implements NotificationChannel {
       const messageType = ghlTypeMap[this.kind];
       if (!messageType) throw new Error(`Canale GHL non supportato: ${this.kind}`);
 
-      const locationId = msg.locationId || process.env.GHL_LOCATION_ID;
-      if (!locationId) throw new Error('GHL non configurato: location ID mancante');
+      if (!msg.contactId) throw new Error('GHL outbound: contactId mancante');
       const params: Parameters<typeof ghlClient.sendMessage>[0] = {
-        locationId,
+        contactId: msg.contactId,
         type: messageType,
         message: msg.body,
-        subject: msg.subject,
+        status: 'pending',
       };
-      if (this.kind === 'email') params.email = msg.recipientAddress;
-      else if (this.kind === 'sms' || this.kind === 'whatsapp') params.phone = msg.recipientAddress;
-      else params.contactId = msg.contactId || msg.recipientAddress;
+      if (msg.subject) params.subject = msg.subject;
+      if (this.kind === 'email') params.emailTo = msg.recipientAddress;
+      else if (this.kind === 'sms' || this.kind === 'whatsapp') params.toNumber = msg.recipientAddress;
       const result = await ghlClient.sendMessage(params, this.locationToken);
 
       await NotificationRepository.log({

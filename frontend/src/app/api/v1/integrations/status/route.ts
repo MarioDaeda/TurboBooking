@@ -63,6 +63,16 @@ export async function GET(request: NextRequest) {
     ...webhook,
     payloadSummary: { keys: Object.keys(_payload || {}) },
   }));
+  const sanitizedNotifications = recentNotifications.map((notification) => ({
+    id: notification.id,
+    channel: notification.channel,
+    provider: notification.provider,
+    status: notification.status,
+    consent_checked: notification.consent_checked,
+    scheduled_for: notification.scheduled_for,
+    sent_at: notification.sent_at,
+    created_at: notification.created_at,
+  }));
 
   return NextResponse.json({
     status: overallHealthy ? 'healthy' : 'degraded',
@@ -98,6 +108,6 @@ export async function GET(request: NextRequest) {
       totalRecentNotifications: recentNotifications.length,
     },
     recentWebhooks: sanitizedWebhooks,
-    recentNotifications,
+    recentNotifications: sanitizedNotifications,
   });
 }

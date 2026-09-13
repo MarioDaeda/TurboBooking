@@ -10,6 +10,7 @@ import { MetaSender } from '../../integrations/meta/metaSender';
 import { GoHighLevelChannel } from '../../integrations/ghl/ghlNotificationChannel';
 import { GeminiBookingAgent } from './geminiBookingAgent';
 import { formatRomeDateTime, getRomeToday } from '../../../lib/romeTime';
+import { GhlEscalationService } from '../../integrations/ghl/ghlEscalationService';
 
 // =============================================================================
 // TURBOBOOKING - CONVERSATIONAL AGENT ENGINE ("UNA SOLA LOGICA")
@@ -73,6 +74,8 @@ export const ConversationalAgentEngine = {
           firstName: event.senderName || 'Utente Social',
           lastName: 'Direct',
           phone: null,
+          privacyConsent: true,
+          marketingConsent: false,
         });
         await ExternalRefsRepository.upsertRef({
           provider,
@@ -135,7 +138,7 @@ export const ConversationalAgentEngine = {
     ) {
       result = {
         replyText:
-          'Per prenotazioni e modifiche ti metto in contatto con la reception: un operatore ti ricontatterà a breve.',
+          'Ho segnalato la richiesta alla reception, che potrà prenderla in carico.',
         intent: 'human_escalation',
         customer,
         escalatedToHuman: true,
@@ -146,8 +149,9 @@ export const ConversationalAgentEngine = {
       switch (intent) {
       case 'human_escalation': {
         result = {
-          replyText:
-            'Certamente! Ho inoltrato la tua richiesta alla nostra reception. Un nostro operatore ti contatterà al più presto su questo numero per assisterti al meglio.',
+          replyText: event.provider === 'ghl'
+            ? 'Ho segnalato la richiesta alla reception, che potrà prenderla in carico.'
+            : 'Questa richiesta richiede l’intervento della reception. Contatta direttamente il salone per ricevere assistenza.',
           intent: 'human_escalation',
           customer,
           escalatedToHuman: true,
@@ -211,7 +215,7 @@ export const ConversationalAgentEngine = {
       case 'booking_cancel': {
         result = {
           replyText:
-            'Ho preso nota della tua richiesta di disdetta. Per tutelare le prenotazioni con caparra o concordate, ho passato la tua richiesta alla reception che ti darà conferma immediata.',
+            'Per completare la disdetta è necessaria la conferma della reception. Contatta direttamente il salone prima di considerare annullato l’appuntamento.',
           intent: 'booking_cancel',
           customer,
           escalatedToHuman: true,
@@ -232,6 +236,13 @@ export const ConversationalAgentEngine = {
         break;
       }
       }
+    }
+
+    if (event.provider === 'ghl' && result.escalatedToHuman) {
+      await GhlEscalationService.escalate({
+        contactId: event.senderId,
+        reason: intent,
+      });
     }
 
     // 3. Invio della risposta sul canale di provenienza (§04.2, §04.4)

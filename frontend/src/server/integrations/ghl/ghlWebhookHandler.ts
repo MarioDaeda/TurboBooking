@@ -36,6 +36,7 @@ export interface GhlInboundMessageDto {
 export type GhlWebhookEvent =
   | { type: 'ContactCreate' | 'ContactUpdate'; data: GhlInboundContactDto; locationId?: string; eventId?: string }
   | { type: 'InboundMessage'; data: GhlInboundMessageDto; locationId?: string; eventId?: string }
+  | { type: 'OutboundMessage'; raw: Record<string, unknown>; eventId?: string }
   | { type: 'Other'; raw: Record<string, unknown>; eventId?: string };
 
 export const GhlWebhookHandler = {
@@ -70,11 +71,17 @@ export const GhlWebhookHandler = {
    * Effettua il parsing e normalizza il payload GHL
    */
   parsePayload(payload: Record<string, unknown>): GhlWebhookEvent {
-    const eventType = (payload.type || payload.eventType || payload.event) as string;
+    const eventType = String(payload.type || payload.eventType || payload.event || '');
+    const normalizedEventType = eventType.trim().toLowerCase();
+    const direction = String(payload.direction || '').trim().toLowerCase();
     const eventId = (payload.webhookId || payload.webhook_id || payload.eventId || payload.event_id) as string | undefined;
     const locationId = (payload.locationId || payload.location_id) as string | undefined;
 
-    if (eventType === 'InboundMessage' || payload.messageType) {
+    if (normalizedEventType === 'outboundmessage' || direction === 'outbound') {
+      return { type: 'OutboundMessage', raw: payload, eventId };
+    }
+
+    if (normalizedEventType === 'inboundmessage') {
       const msgData: GhlInboundMessageDto = {
         messageId: (payload.messageId || payload.message_id || '') as string,
         conversationId: (payload.conversationId || '') as string,
@@ -96,9 +103,9 @@ export const GhlWebhookHandler = {
       };
     }
 
-    if (eventType === 'ContactCreate' || eventType === 'ContactUpdate') {
+    if (normalizedEventType === 'contactcreate' || normalizedEventType === 'contactupdate') {
       return {
-        type: eventType,
+        type: normalizedEventType === 'contactcreate' ? 'ContactCreate' : 'ContactUpdate',
         data: (payload.contact || payload) as GhlInboundContactDto,
         locationId,
         eventId,

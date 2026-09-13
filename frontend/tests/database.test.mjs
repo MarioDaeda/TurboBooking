@@ -28,7 +28,7 @@ test('SQL migrations, duration contract, ACL, idempotency, conflicts and expired
   }
   assert.equal((await db.query("select has_table_privilege('service_role','bookings','INSERT') as allowed")).rows[0].allowed,false);
   assert.equal((await db.query("select has_table_privilege('authenticated','staff_memberships','INSERT') as allowed")).rows[0].allowed,false);
-  for (const table of ['inbound_webhooks','external_refs','notification_messages']) {
+  for (const table of ['inbound_webhooks','external_refs','notification_messages','processed_provider_events']) {
     const acl=(await db.query("select has_table_privilege('anon',$1,'SELECT') as anon,has_table_privilege('authenticated',$1,'SELECT') as authenticated,has_table_privilege('service_role',$1,'SELECT') as service_role",[table])).rows[0];
     assert.deepEqual(acl,{anon:false,authenticated:false,service_role:true});
   }
@@ -36,6 +36,10 @@ test('SQL migrations, duration contract, ACL, idempotency, conflicts and expired
   const webhookState=(await db.query("select processing_status,retention_expires_at from inbound_webhooks where external_id='evt-1'")).rows[0];
   assert.equal(webhookState.processing_status,'pending');
   assert.ok(webhookState.retention_expires_at);
+  await db.query("update inbound_webhooks set received_at=clock_timestamp()-interval '40 days',retention_expires_at=clock_timestamp()+interval '30 days' where external_id='evt-1'");
+  await db.exec(fs.readFileSync(new URL('migrations/0009_integration_retention_cron.sql',root),'utf8'));
+  const retention=(await db.query("select received_at,retention_expires_at from inbound_webhooks where external_id='evt-1'")).rows[0];
+  assert.equal(new Date(retention.retention_expires_at)-new Date(retention.received_at),30*24*60*60*1000);
   await db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload,retention_expires_at) values('meta','evt-retention',true,'{\"email\":\"secret@example.test\"}',clock_timestamp()-interval '1 minute')");
   await db.exec('SET ROLE service_role');
   assert.equal((await db.query('select public.tb_redact_expired_inbound_webhooks() as n')).rows[0].n,1);
@@ -43,6 +47,16 @@ test('SQL migrations, duration contract, ACL, idempotency, conflicts and expired
   assert.deepEqual(redacted,{payload:{},retention_expires_at:null});
   await db.exec('RESET ROLE');
   await assert.rejects(()=>db.query("insert into inbound_webhooks(provider,external_id,signature_valid,payload) values('meta','evt-1',true,'{}')"),/inbound_webhooks_provider_external_id_key/);
+  const claimSignature=(await db.query("select oid::regprocedure::text as signature,proconfig from pg_proc where proname='tb_claim_provider_event'")).rows[0];
+  assert.ok(claimSignature.proconfig.includes('search_path=""'));
+  const claimAcl=await db.query("select has_function_privilege('anon',$1,'EXECUTE') as anon,has_function_privilege('authenticated',$1,'EXECUTE') as authenticated,has_function_privilege('service_role',$1,'EXECUTE') as service_role",[claimSignature.signature]);
+  assert.deepEqual(claimAcl.rows[0],{anon:false,authenticated:false,service_role:true});
+  assert.equal((await db.query("select tb_claim_provider_event('meta','message','message-1') as claimed")).rows[0].claimed,true);
+  assert.equal((await db.query("select tb_claim_provider_event('meta','message','message-1') as claimed")).rows[0].claimed,false);
+  await db.query("update processed_provider_events set processing_status='failed' where provider='meta' and event_type='message' and external_id='message-1'");
+  assert.equal((await db.query("select tb_claim_provider_event('meta','message','message-1') as claimed")).rows[0].claimed,true);
+  await db.query("update processed_provider_events set processing_status='processed' where provider='meta' and event_type='message' and external_id='message-1'");
+  assert.equal((await db.query("select tb_claim_provider_event('meta','message','message-1') as claimed")).rows[0].claimed,false);
   const op=(await db.query("insert into operators(name) values('Test') returning id")).rows[0].id;
   const service=(await db.query("insert into services(name,duration_minutes,price) values('Test',30,20) returning id")).rows[0].id;
   const customerRow=(await db.query("insert into customers(first_name,has_privacy_consent,marketing_consent) values('Test',true,false) returning id,has_privacy_consent,marketing_consent,privacy_consent_at")).rows[0];

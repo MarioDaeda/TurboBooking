@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MetaSignature } from '@/server/integrations/meta/metaSignature';
 import { MetaWebhookParser } from '@/server/integrations/meta/metaWebhookParser';
-import { InboundWebhookRepository, NotificationRepository } from '@/server/db/repositories';
+import {
+  InboundWebhookRepository,
+  NotificationRepository,
+  ProviderEventKey,
+  ProviderEventRepository,
+} from '@/server/db/repositories';
 import { ConversationalAgentEngine } from '@/server/domain/conversational/conversationalAgentEngine';
 import { InboundMessageEvent } from '@/server/domain/conversational/conversationalTypes';
 import { MetaMediaClient } from '@/server/integrations/meta/metaMediaClient';
@@ -31,6 +36,24 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({ error: 'Meta token verification failed' }, { status: 403 });
+}
+
+async function processProviderEvent(
+  key: ProviderEventKey,
+  task: () => Promise<void>
+): Promise<boolean> {
+  const claimed = await ProviderEventRepository.claim(key);
+  if (!claimed) return false;
+
+  try {
+    await task();
+    await ProviderEventRepository.markProcessed(key);
+    return true;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    await ProviderEventRepository.markFailed(key, message);
+    throw error;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -72,45 +95,64 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'processing_in_progress' }, { status: 202 });
   }
 
-  // 3. Elaborazione attraverso l'unica logica di dominio (ancora sincrona finché non c'è una queue durabile)
+  // 3. Elaborazione sincrona con claim per singolo evento: un retry parziale
+  // salta messaggi e delivery status già completati.
+  let processedMessages = 0;
+  let processedStatuses = 0;
   try {
     for (const delivery of normalizedStatuses) {
-      await NotificationRepository.updateProviderStatus({
-        providerMessageId: delivery.messageId,
-        status: delivery.status,
-        error: delivery.error,
-      });
-      if (delivery.phoneNumberId) {
-        ServiceMessageCounter.record({
-          phoneNumberId: delivery.phoneNumberId,
-          messageId: delivery.messageId,
-          pricingCategory: delivery.pricingCategory,
+      const handled = await processProviderEvent({
+        provider: 'meta',
+        eventType: `delivery_${delivery.status}`,
+        externalId: delivery.messageId,
+      }, async () => {
+        await NotificationRepository.updateProviderStatus({
+          providerMessageId: delivery.messageId,
+          status: delivery.status,
+          error: delivery.error,
         });
-      }
+        if (delivery.phoneNumberId) {
+          ServiceMessageCounter.record({
+            phoneNumberId: delivery.phoneNumberId,
+            messageId: delivery.messageId,
+            pricingCategory: delivery.pricingCategory,
+          });
+        }
+      });
+      if (handled) processedStatuses += 1;
     }
 
     for (const msg of normalizedMessages) {
-      if (msg.channel === 'leadgen') {
-        await MetaLeadHandler.process(msg);
-        continue;
-      }
-      const media = msg.imageMediaId
-        ? await MetaMediaClient.fetchMediaAsBase64(msg.imageMediaId)
-        : null;
-      const inboundEvent: InboundMessageEvent = {
+      const key: ProviderEventKey = {
         provider: 'meta',
-        channel: msg.channel,
-        senderId: msg.senderId,
-        senderPhoneE164: msg.senderPhoneE164,
-        senderName: msg.senderName,
-        text: msg.text,
-        imageBase64: media?.base64,
-        imageMimeType: media?.mimeType || msg.imageMimeType,
-        timestamp: msg.timestamp,
-        rawPayload: msg.rawPayload,
+        eventType: msg.channel === 'leadgen' ? 'lead' : 'message',
+        externalId: msg.messageId,
       };
+      const handled = await processProviderEvent(key, async () => {
+        if (msg.channel === 'leadgen') {
+          await MetaLeadHandler.process(msg);
+          return;
+        }
 
-      await ConversationalAgentEngine.processInboundMessage(inboundEvent);
+        const media = msg.imageMediaId
+          ? await MetaMediaClient.fetchMediaAsBase64(msg.imageMediaId)
+          : null;
+        const inboundEvent: InboundMessageEvent = {
+          provider: 'meta',
+          channel: msg.channel,
+          senderId: msg.senderId,
+          senderPhoneE164: msg.senderPhoneE164,
+          senderName: msg.senderName,
+          text: msg.text,
+          imageBase64: media?.base64,
+          imageMimeType: media?.mimeType || msg.imageMimeType,
+          timestamp: msg.timestamp,
+          rawPayload: msg.rawPayload,
+        };
+
+        await ConversationalAgentEngine.processInboundMessage(inboundEvent);
+      });
+      if (handled) processedMessages += 1;
     }
 
     await InboundWebhookRepository.markProcessed(record.id);
@@ -123,7 +165,7 @@ export async function POST(request: NextRequest) {
   // Risposta rapida per rispettare il timeout Meta (< 3 secondi)
   return NextResponse.json({
     status: 'accepted',
-    processed: normalizedMessages.length,
-    deliveryStatuses: normalizedStatuses.length,
+    processed: processedMessages,
+    deliveryStatuses: processedStatuses,
   }, { status: 202 });
 }

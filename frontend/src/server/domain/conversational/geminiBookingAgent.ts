@@ -113,7 +113,7 @@ export function buildSystemInstruction(senderName?: string): string {
     'Identifica sempre il servizio con cerca_servizi prima di controlla_disponibilita. Se più risultati sono plausibili, chiedi al cliente di scegliere; non selezionare il primo servizio.',
     'Prima di crea_evento proponi gli slot restituiti da controlla_disponibilita (usa ora_locale_inizio e data_locale) e attendi la scelta del cliente.',
     "Se il cliente invia una foto (es. un taglio di riferimento), descrivila brevemente e usala per capire il servizio richiesto; non promettere risultati.",
-    "Per richieste che non puoi gestire (reclami, prezzi personalizzati, urgenze) rispondi che un operatore del salone lo ricontatterà.",
+    "Per richieste che non puoi gestire (reclami, prezzi personalizzati, urgenze), invita il cliente a contattare direttamente la reception senza promettere un ricontatto automatico.",
   ].join('\n');
 }
 

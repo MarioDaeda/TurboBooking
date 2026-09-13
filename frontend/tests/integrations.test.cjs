@@ -58,10 +58,74 @@ test('GHL parser keeps provider webhook/message ids and rejects unknown channels
   const create = GhlWebhookHandler.parsePayload({ type: 'ContactCreate', webhookId: 'delivery-create', id: 'contact-1' });
   const update = GhlWebhookHandler.parsePayload({ type: 'ContactUpdate', webhookId: 'delivery-update', id: 'contact-1' });
   assert.notEqual(create.eventId, update.eventId);
+  assert.equal(GhlWebhookHandler.parsePayload({ type: 'OutboundMessage', messageType: 'SMS', direction: 'outbound' }).type, 'OutboundMessage');
+  assert.equal(GhlWebhookHandler.parsePayload({ type: 'Anything', messageType: 'SMS', direction: 'outbound' }).type, 'OutboundMessage');
+  assert.equal(GhlWebhookHandler.parsePayload({ type: 'Anything', messageType: 'SMS' }).type, 'Other');
   assert.equal(normalizeGhlChannel('sms'), 'sms');
   assert.equal(normalizeGhlChannel('ig'), 'instagram');
   assert.equal(normalizeGhlChannel('Email'), null);
   assert.equal(normalizeGhlChannel('unknown'), null);
+});
+
+test('GHL Conversations client sends the documented v3 contract', async () => {
+  const previousFetch = global.fetch;
+  let request;
+  global.fetch = async (url, options) => {
+    request = { url, options, body: JSON.parse(options.body) };
+    return { ok: true, json: async () => ({ messageId: 'message-1' }) };
+  };
+  try {
+    const { GoHighLevelClient } = load('src/server/integrations/ghl/ghlClient.ts');
+    const result = await new GoHighLevelClient().sendMessage({
+      contactId: 'contact-1', type: 'SMS', message: 'ciao', toNumber: '+39123', status: 'pending',
+    }, 'token');
+    assert.equal(request.url, 'https://services.leadconnectorhq.com/conversations/messages');
+    assert.equal(request.options.headers.Version, 'v3');
+    assert.deepEqual(request.body, {
+      contactId: 'contact-1', type: 'SMS', message: 'ciao', toNumber: '+39123', status: 'pending',
+    });
+    assert.equal(request.body.phone, undefined);
+    assert.equal(request.body.email, undefined);
+    assert.equal(result.status, 'queued');
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
+
+test('GHL route ignores outbound webhooks without invoking the conversation engine', async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'test';
+  let processed = 0;
+  let engineCalls = 0;
+  try {
+    const { POST } = load('src/app/api/webhooks/ghl/route.ts', {
+      '@/server/db/repositories': {
+        InboundWebhookRepository: {
+          save: async () => ({ record: { id: 'webhook-1', processed_at: null, error: null }, isDuplicate: false }),
+          claimForProcessing: async () => ({ id: 'webhook-1' }),
+          markProcessed: async () => { processed += 1; },
+          markFailed: async () => {},
+        },
+        CustomerRepository: {},
+        ExternalRefsRepository: {},
+      },
+      '@/server/domain/conversational/conversationalAgentEngine': {
+        ConversationalAgentEngine: { processInboundMessage: async () => { engineCalls += 1; } },
+      },
+      '@/server/integrations/ghl/ghlContactMapper': { GhlContactMapper: {} },
+    });
+    const payload = JSON.stringify({
+      type: 'OutboundMessage', direction: 'outbound', messageType: 'SMS',
+      contactId: 'contact-1', messageId: 'message-out-1', body: 'Risposta TurboBooking',
+    });
+    const response = await POST({ text: async () => payload, headers: new Headers() });
+    assert.equal(response.status, 202);
+    assert.equal((await response.json()).status, 'ignored_outbound_message');
+    assert.equal(engineCalls, 0);
+    assert.equal(processed, 1);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+  }
 });
 
 test('Meta parser preserves image media and delivery statuses', () => {
@@ -81,6 +145,64 @@ test('Meta parser preserves image media and delivery statuses', () => {
   assert.deepEqual(statuses[0], {
     messageId: 'out-1', status: 'delivered', phoneNumberId: 'phone-1', pricingCategory: 'service', error: undefined,
   });
+});
+
+test('Meta retries only the failed message after partial webhook processing', async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'test';
+  const eventStates = new Map();
+  const attempts = new Map();
+  let webhookError = null;
+  let saves = 0;
+  try {
+    const { POST } = load('src/app/api/webhooks/meta/route.ts', {
+      '@/server/db/repositories': {
+        InboundWebhookRepository: {
+          save: async () => ({
+            record: { id: 'webhook-meta', processed_at: null, error: webhookError },
+            isDuplicate: saves++ > 0,
+          }),
+          claimForProcessing: async () => ({ id: 'webhook-meta' }),
+          markProcessed: async () => { webhookError = null; },
+          markFailed: async (_id, error) => { webhookError = error; },
+        },
+        NotificationRepository: { updateProviderStatus: async () => {} },
+        ProviderEventRepository: {
+          claim: async key => eventStates.get(key.externalId) !== 'processed',
+          markProcessed: async key => { eventStates.set(key.externalId, 'processed'); },
+          markFailed: async key => { eventStates.set(key.externalId, 'failed'); },
+        },
+      },
+      '@/server/domain/conversational/conversationalAgentEngine': {
+        ConversationalAgentEngine: {
+          processInboundMessage: async event => {
+            const id = event.rawPayload.id;
+            attempts.set(id, (attempts.get(id) || 0) + 1);
+            if (id === 'message-2' && attempts.get(id) === 1) throw new Error('temporary failure');
+          },
+        },
+      },
+      '@/server/integrations/meta/metaMediaClient': { MetaMediaClient: { fetchMediaAsBase64: async () => null } },
+      '@/server/domain/messaging/serviceMessageCounter': { ServiceMessageCounter: { record: () => {} } },
+      '@/server/integrations/meta/metaLeadHandler': { MetaLeadHandler: { process: async () => {} } },
+    });
+    const payload = JSON.stringify({ entry: [{ changes: [{ value: {
+      contacts: [{ profile: { name: 'Mario' } }],
+      messages: [
+        { id: 'message-1', from: '393401234567', type: 'text', timestamp: '1', text: { body: 'ciao' } },
+        { id: 'message-2', from: '393401234567', type: 'text', timestamp: '2', text: { body: 'orari' } },
+      ],
+    } }] }] });
+    const request = () => ({ text: async () => payload, headers: new Headers() });
+    assert.equal((await POST(request())).status, 500);
+    const retry = await POST(request());
+    assert.equal(retry.status, 202);
+    assert.equal((await retry.json()).processed, 1);
+    assert.equal(attempts.get('message-1'), 1);
+    assert.equal(attempts.get('message-2'), 2);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+  }
 });
 
 test('webhook repository treats provider/external_id conflicts as duplicates', async () => {
@@ -150,16 +272,60 @@ test('GHL channel routes fields per channel and blocks missing consent', async (
     './ghlClient': { ghlClient: { sendMessage: async params => { sent = params; return { messageId: 'msg-1', status: 'sent' }; } } },
   });
   const customer = { id: 'customer-1', has_privacy_consent: true, marketing_consent: false };
-  const receipt = await new GoHighLevelChannel('email').send({ recipientAddress: 'mario@example.test', subject: 'Conferma', body: 'ok', isTransactional: true, locationId: 'loc-1' }, customer);
+  const receipt = await new GoHighLevelChannel('email').send({ recipientAddress: 'mario@example.test', contactId: 'contact-1', subject: 'Conferma', body: 'ok', isTransactional: true, locationId: 'loc-1' }, customer);
   assert.equal(receipt.success, true);
   assert.equal(sent.type, 'Email');
-  assert.equal(sent.email, 'mario@example.test');
+  assert.equal(sent.contactId, 'contact-1');
+  assert.equal(sent.emailTo, 'mario@example.test');
+  assert.equal(sent.status, 'pending');
+  assert.equal(sent.email, undefined);
   assert.equal(sent.phone, undefined);
   const rejected = await new GoHighLevelChannel('sms').send({ recipientAddress: '+39123', body: 'promo', isTransactional: false, locationId: 'loc-1' }, customer);
   assert.equal(rejected.success, false);
   assert.equal(logs.at(-1).status, 'rejected_no_consent');
   const noPrivacy = await new GoHighLevelChannel('sms').send({ recipientAddress: '+39123', body: 'conferma', isTransactional: true, locationId: 'loc-1' }, { ...customer, has_privacy_consent: false });
   assert.equal(noPrivacy.success, false);
+});
+
+test('GHL escalation creates actionable reception tags', async () => {
+  let tagged;
+  const { GhlEscalationService } = load('src/server/integrations/ghl/ghlEscalationService.ts', {
+    './ghlClient': { ghlClient: { addTags: async (contactId, tags) => { tagged = { contactId, tags }; } } },
+  });
+  const tags = await GhlEscalationService.escalate({ contactId: 'contact-1', reason: 'booking_cancel', locationToken: 'token' });
+  assert.equal(tagged.contactId, 'contact-1');
+  assert.deepEqual(tags, ['tb_human_escalation', 'tb_needs_reception', 'tb_booking_cancel']);
+  assert.deepEqual(tagged.tags, tags);
+});
+
+test('GHL booking requests trigger reception escalation before replying', async () => {
+  let escalation;
+  let replies = 0;
+  const customer = { id: 'customer-1', first_name: 'Mario', phone: '+39123', has_privacy_consent: true, marketing_consent: false };
+  const { ConversationalAgentEngine } = load('src/server/domain/conversational/conversationalAgentEngine.ts', {
+    '../../db/repositories': {
+      CustomerRepository: { findByPhone: async () => customer },
+      ExternalRefsRepository: { upsertRef: async () => {} },
+      NotificationRepository: { log: async () => {} },
+    },
+    '../booking/availabilityService': { AvailabilityService: {} },
+    '../../integrations/meta/metaSender': { MetaSender: {} },
+    '../../integrations/ghl/ghlNotificationChannel': {
+      GoHighLevelChannel: class { async send() { replies += 1; return { success: true }; } },
+    },
+    '../../integrations/ghl/ghlEscalationService': {
+      GhlEscalationService: { escalate: async input => { escalation = input; } },
+    },
+    './geminiBookingAgent': { GeminiBookingAgent: {} },
+  });
+  const result = await ConversationalAgentEngine.processInboundMessage({
+    provider: 'ghl', channel: 'sms', senderId: 'contact-1', senderPhoneE164: '+39123',
+    text: 'vorrei prenotare', timestamp: 1, rawPayload: {},
+  });
+  assert.equal(result.escalatedToHuman, true);
+  assert.equal(escalation.contactId, 'contact-1');
+  assert.equal(escalation.reason, 'booking_request');
+  assert.equal(replies, 1);
 });
 
 test('GHL outbound failure is propagated by the conversational engine', async () => {
@@ -169,6 +335,7 @@ test('GHL outbound failure is propagated by the conversational engine', async ()
     '../../integrations/ghl/ghlNotificationChannel': {
       GoHighLevelChannel: class { async send() { return { success: false, error: 'provider down' }; } },
     },
+    '../../integrations/ghl/ghlEscalationService': { GhlEscalationService: { escalate: async () => {} } },
     '../booking/availabilityService': { AvailabilityService: {} },
     './geminiBookingAgent': { GeminiBookingAgent: {} },
   });
@@ -220,12 +387,15 @@ test('social contacts are created with null phone and linked by external ref', a
     '../booking/availabilityService': { AvailabilityService: {} },
     '../../integrations/meta/metaSender': { MetaSender: { sendGraphMessage: async () => ({ success: true, messageId: 'out-1' }) } },
     '../../integrations/ghl/ghlNotificationChannel': { GoHighLevelChannel: class {} },
+    '../../integrations/ghl/ghlEscalationService': { GhlEscalationService: { escalate: async () => {} } },
     './geminiBookingAgent': { GeminiBookingAgent: {} },
   });
   await ConversationalAgentEngine.processInboundMessage({
     provider: 'meta', channel: 'instagram', senderId: 'ig-1', senderName: 'Social', text: 'ciao', timestamp: 1, rawPayload: {},
   });
   assert.equal(createdInput.phone, null);
+  assert.equal(createdInput.privacyConsent, true);
+  assert.equal(createdInput.marketingConsent, false);
   assert.equal(linked.externalId, 'ig-1');
   assert.equal(linked.entityId, 'customer-1');
 });
@@ -240,4 +410,36 @@ test('provider senders fail closed when production configuration is missing', as
   assert.equal(result.success, false);
   assert.match(result.error, /non configurato/);
   if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous;
+});
+
+test('integration status redacts webhook and notification sensitive fields', async () => {
+  const { GET } = load('src/app/api/v1/integrations/status/route.ts', {
+    '@/server/auth/staffAuth': { verifyStaffAuthorization: async () => ({ authorized: true }) },
+    '@/server/http/api': { apiError: error => { throw error; } },
+    '@/server/db/supabaseClient': {
+      getSupabaseAdminClient: () => ({
+        from: () => ({ select() { return this; }, async limit() { return { error: null }; } }),
+      }),
+    },
+    '@/server/db/repositories': {
+      InboundWebhookRepository: {
+        listRecent: async () => [{ id: 'webhook-1', provider: 'meta', payload: { phone: '+39123', text: 'segreto' } }],
+      },
+      NotificationRepository: {
+        listRecent: async () => [{
+          id: 'notification-1', channel: 'sms', provider: 'ghl', status: 'sent',
+          consent_checked: true, scheduled_for: null, sent_at: '2026-01-01', created_at: '2026-01-01',
+          to_address: '+39123', body_preview: 'segreto', provider_message_id: 'provider-1', error: 'private',
+        }],
+      },
+    },
+  });
+  const response = await GET({});
+  const body = await response.json();
+  assert.equal(body.recentWebhooks[0].payload, undefined);
+  assert.deepEqual(body.recentWebhooks[0].payloadSummary.keys, ['phone', 'text']);
+  assert.equal(body.recentNotifications[0].to_address, undefined);
+  assert.equal(body.recentNotifications[0].body_preview, undefined);
+  assert.equal(body.recentNotifications[0].provider_message_id, undefined);
+  assert.equal(body.recentNotifications[0].error, undefined);
 });

@@ -8,7 +8,7 @@ import { createHash } from 'crypto';
 
 // =============================================================================
 // TURBOBOOKING - GOHIGHLEVEL WEBHOOK ROUTE HANDLER
-// Accoglie eventi da GHL: InboundMessage, ContactCreate, ContactUpdate
+// Accoglie eventi da GHL e ignora esplicitamente gli outbound per evitare loop.
 // =============================================================================
 
 export async function POST(request: NextRequest) {
@@ -29,8 +29,12 @@ export async function POST(request: NextRequest) {
   }
 
   const parsedEvent = GhlWebhookHandler.parsePayload(parsedJson);
-  const externalId = parsedEvent.eventId ||
-    (parsedEvent.type === 'InboundMessage' ? parsedEvent.data.messageId || undefined : undefined) ||
+  const messageId = parsedEvent.type === 'InboundMessage'
+    ? parsedEvent.data.messageId
+    : parsedEvent.type === 'OutboundMessage'
+      ? String(parsedEvent.raw.messageId || parsedEvent.raw.message_id || '')
+      : '';
+  const externalId = parsedEvent.eventId || messageId ||
     `ghl_${createHash('sha256').update(rawBody).digest('hex')}`;
 
   // 2. Persistenza prima dell'elaborazione (§04.7)
@@ -50,8 +54,14 @@ export async function POST(request: NextRequest) {
   }
   // 3. Routing di dominio
   try {
+    if (parsedEvent.type === 'OutboundMessage') {
+      await InboundWebhookRepository.markProcessed(record.id);
+      return NextResponse.json({ status: 'ignored_outbound_message' }, { status: 202 });
+    }
+
     if (parsedEvent.type === 'InboundMessage') {
       const msg = parsedEvent.data;
+      if (!msg.contactId) throw new Error('GHL InboundMessage: contactId mancante');
       const channel = normalizeGhlChannel(msg.messageType);
       if (!channel) {
         await InboundWebhookRepository.markProcessed(record.id);

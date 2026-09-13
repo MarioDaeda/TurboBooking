@@ -1,18 +1,18 @@
 import { GhlContactPayload } from './ghlContactMapper';
 
 // =============================================================================
-// TURBOBOOKING - GHL API V2 CLIENT
+// TURBOBOOKING - GHL API CLIENT
 // Gestione chiamate HTTP verso LeadConnector con rate-limiting e resilient fallback
 // =============================================================================
 
 export interface GhlSendMessageParams {
-  locationId: string;
-  contactId?: string;
-  phone?: string;
-  email?: string;
+  contactId: string;
   type: 'SMS' | 'WhatsApp' | 'Email' | 'IG' | 'FB';
   message: string;
   subject?: string;
+  toNumber?: string;
+  emailTo?: string;
+  status: 'pending';
 }
 
 export class GoHighLevelClient {
@@ -56,7 +56,7 @@ export class GoHighLevelClient {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${locationToken}`,
-        Version: '2021-07-28',
+        Version: 'v3',
       },
       body: JSON.stringify({
         locationId,
@@ -87,7 +87,7 @@ export class GoHighLevelClient {
       if (!this.allowMocks()) throw new Error('GHL non configurato: credenziali o location token mancanti');
       return {
         messageId: `ghl_msg_${Date.now()}`,
-        status: 'sent',
+        status: 'queued',
       };
     }
 
@@ -96,7 +96,7 @@ export class GoHighLevelClient {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${locationToken}`,
-        Version: '2021-04-15',
+        Version: 'v3',
       },
       body: JSON.stringify(params),
     });
@@ -106,10 +106,12 @@ export class GoHighLevelClient {
       throw new Error(`GHL sendMessage error [${res.status}]: ${err}`);
     }
 
-    const data = await res.json();
+    const data = await res.json() as { messageId?: string; messageIds?: string[] };
+    const messageId = data.messageId || data.messageIds?.[0];
+    if (!messageId) throw new Error('GHL sendMessage: risposta priva di messageId');
     return {
-      messageId: data.messageId || `msg_${Date.now()}`,
-      status: 'sent',
+      messageId,
+      status: 'queued',
     };
   }
 
@@ -126,15 +128,20 @@ export class GoHighLevelClient {
       return;
     }
 
-    await fetch(`${this.baseUrl}/contacts/${contactId}/tags`, {
+    const res = await fetch(`${this.baseUrl}/contacts/${encodeURIComponent(contactId)}/tags`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${locationToken}`,
-        Version: '2021-07-28',
+        Version: 'v3',
       },
       body: JSON.stringify({ tags }),
     });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`GHL addTags error [${res.status}]: ${errorText}`);
+    }
   }
 }
 

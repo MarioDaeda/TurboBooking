@@ -12,6 +12,7 @@ import {
   InboundWebhookRow,
   ExternalRefRow,
   NotificationMessageRow,
+  ProcessedProviderEventRow,
 } from './supabaseClient';
 
 // =============================================================================
@@ -954,7 +955,7 @@ export const AppointmentRepository = {
 
 // =============================================================================
 // 5. INBOUND WEBHOOKS, EXTERNAL REFS, NOTIFICATIONS
-// Le tabelle sono server-only e vengono create dalle migrazioni 0004–0007.
+// Le tabelle sono server-only e vengono create dalle migrazioni 0004–0009.
 // In caso di database non aggiornato l'errore resta esplicito, senza fallback.
 // =============================================================================
 
@@ -1117,6 +1118,64 @@ export const InboundWebhookRepository = {
     const { data, error } = await supabase.rpc('tb_redact_expired_inbound_webhooks');
     if (error) throw integrationTableError('inbound_webhooks', error);
     return typeof data === 'number' ? data : 0;
+  },
+};
+
+export interface ProviderEventKey {
+  provider: string;
+  eventType: string;
+  externalId: string;
+}
+
+export const ProviderEventRepository = {
+  async claim({ provider, eventType, externalId }: ProviderEventKey): Promise<boolean> {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase.rpc('tb_claim_provider_event', {
+      p_provider: provider,
+      p_event_type: eventType,
+      p_external_id: externalId,
+    });
+    if (error) throw integrationTableError('processed_provider_events', error);
+    return data === true;
+  },
+
+  async markProcessed({ provider, eventType, externalId }: ProviderEventKey): Promise<void> {
+    const now = new Date().toISOString();
+    const supabase = getSupabaseAdminClient();
+    const { error } = await supabase
+      .from('processed_provider_events')
+      .update({
+        processing_status: 'processed',
+        processing_started_at: null,
+        processed_at: now,
+        error: null,
+        updated_at: now,
+      } satisfies Partial<ProcessedProviderEventRow>)
+      .eq('provider', provider)
+      .eq('event_type', eventType)
+      .eq('external_id', externalId);
+    if (error) throw integrationTableError('processed_provider_events', error);
+  },
+
+  async markFailed(
+    { provider, eventType, externalId }: ProviderEventKey,
+    failure: string
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const supabase = getSupabaseAdminClient();
+    const { error } = await supabase
+      .from('processed_provider_events')
+      .update({
+        processing_status: 'failed',
+        processing_started_at: null,
+        processed_at: null,
+        error: failure,
+        updated_at: now,
+      } satisfies Partial<ProcessedProviderEventRow>)
+      .eq('provider', provider)
+      .eq('event_type', eventType)
+      .eq('external_id', externalId);
+    if (error) throw integrationTableError('processed_provider_events', error);
   },
 };
 
