@@ -87,8 +87,9 @@ export const DayScheduleModal: React.FC<DayScheduleModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-[2px]">
+      {/* Su mobile si apre come pannello dal basso */}
+      <div className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[92dvh] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
           <div className="flex items-center gap-3">
@@ -116,7 +117,7 @@ export const DayScheduleModal: React.FC<DayScheduleModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-5 overflow-y-auto max-h-[80vh]">
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
           {/* Status Switcher: Aperto vs Chiuso */}
           <div className="space-y-2">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
@@ -287,7 +288,7 @@ export const DayScheduleModal: React.FC<DayScheduleModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/70 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-100 bg-gray-50/70 flex flex-wrap items-center justify-between gap-2">
           <div>
             {day.isOverridden && onResetOverride && (
               <button

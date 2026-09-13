@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Search, Plus, Trash2, Clock, Edit2 } from 'lucide-react';
 import { StaffMember, ServiceItem } from '@/types';
+import { masterDetailClasses, MobileBackButton } from '@/components/layout/MasterDetail';
 
 interface StaffViewProps {
   staffList: StaffMember[];
@@ -13,6 +14,8 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
+  const panes = masterDetailClasses(isMobileDetailOpen);
 
   const effectiveStaffId = selectedStaffId || staffList[0]?.id || '';
   const currentStaff = staffList.find((s) => s.id === effectiveStaffId) || staffList[0];
@@ -20,7 +23,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none">
       {/* Sub Sidebar */}
-      <div className="w-72 border-r border-gray-200 flex flex-col bg-white">
+      <div className={`${panes.list} flex-col bg-white`}>
         <div className="p-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
@@ -47,7 +50,10 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
           {staffList.map((staff) => (
             <div
               key={staff.id}
-              onClick={() => setSelectedStaffId(staff.id)}
+              onClick={() => {
+                setSelectedStaffId(staff.id);
+                setIsMobileDetailOpen(true);
+              }}
               className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition ${
                 selectedStaffId === staff.id
                   ? 'bg-tw-blue-light text-tw-blue font-bold'
@@ -66,9 +72,10 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
       </div>
 
       {/* Main Staff Details Panel */}
-      <div className="flex-1 overflow-y-auto p-8 bg-tw-canvas space-y-6">
+      <div className={`${panes.detail} flex-col flex-1 overflow-y-auto p-4 md:p-8 bg-tw-canvas space-y-6`}>
         {/* Top Header of Detail Panel */}
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
+        <div className="flex flex-wrap items-center justify-between gap-3 max-w-4xl w-full mx-auto">
+          <MobileBackButton onClick={() => setIsMobileDetailOpen(false)} label="Staff" className="w-full" />
           <button
             onClick={() => alert('Elimina')}
             className="text-xs font-semibold text-red-500 hover:text-red-700 flex items-center gap-1 uppercase"
@@ -94,14 +101,14 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl w-full mx-auto space-y-6">
           {/* Card 1: Dati Personali */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-4">
             <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider">
               DATI PERSONALI
             </div>
 
-            <div className="flex items-center gap-6">
+            <div className="flex flex-col sm:flex-row items-center gap-6">
               <div className="flex flex-col items-center gap-2">
                 <div className="relative w-20 h-20 rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
                   <img
@@ -118,7 +125,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
                 </button>
               </div>
 
-              <div className="flex-1 grid grid-cols-2 gap-4">
+              <div className="w-full sm:flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <input
                   type="text"
                   value={currentStaff.name}
@@ -177,9 +184,9 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
           </div>
 
           {/* Card 3: Orari & Ferie/Permessi */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs grid grid-cols-2 divide-x divide-gray-200">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-0 md:divide-x divide-gray-200">
             {/* Left: Orari */}
-            <div className="pr-6 space-y-4">
+            <div className="md:pr-6 space-y-4">
               <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 ORARI (ORARIO 1)
               </div>
@@ -199,7 +206,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
             </div>
 
             {/* Right: Ferie e Permessi */}
-            <div className="pl-6 space-y-4">
+            <div className="md:pl-6 space-y-4">
               <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 FERIE E PERMESSI
               </div>
@@ -230,8 +237,8 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
 
           {/* Card 4: Servizi Attivi */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="relative w-64">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+              <div className="relative w-full sm:w-64 order-last sm:order-none">
                 <input
                   type="text"
                   placeholder="Quale servizio vuoi ..."
@@ -257,15 +264,15 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, services }) => 
             {/* List of active services */}
             <div className="divide-y divide-gray-100">
               {services.map((srv) => (
-                <div key={srv.id} className="py-3 flex items-center justify-between text-xs">
+                <div key={srv.id} className="py-3 flex items-center justify-between gap-3 text-xs">
                   <span className="font-semibold text-gray-800">{srv.name}</span>
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-3 sm:gap-6 shrink-0">
                     <span className="font-bold text-gray-800">€ {srv.price.toFixed(2)}</span>
-                    <span className="text-gray-500 flex items-center gap-1 font-mono">
+                    <span className="text-gray-500 hidden sm:flex items-center gap-1 font-mono">
                       <Clock className="w-3 h-3 text-gray-400" />
                       {srv.duration}
                     </span>
-                    <span className="bg-yellow-100 text-yellow-800 font-bold text-[9px] px-2 py-0.5 rounded-full uppercase">
+                    <span className="hidden sm:inline bg-yellow-100 text-yellow-800 font-bold text-[9px] px-2 py-0.5 rounded-full uppercase">
                       ONLINE
                     </span>
                     <Edit2 className="w-3.5 h-3.5 text-gray-400 hover:text-tw-blue cursor-pointer" />

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Search, Plus, ShieldCheck, AlertCircle, Calendar, X, Check } from 'lucide-react';
 import { Client } from '@/types';
+import { masterDetailClasses, MobileBackButton } from '@/components/layout/MasterDetail';
 
 interface RubricaViewProps {
   clients: Client[];
@@ -13,6 +14,8 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
+  const panes = masterDetailClasses(isMobileDetailOpen);
 
   // New Client Form state
   const [newFirstName, setNewFirstName] = useState('');
@@ -131,6 +134,7 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
         onAddClient(created);
       }
       setSelectedClientId(created.id);
+      setIsMobileDetailOpen(true);
       setIsNewClientModalOpen(false);
 
       // Reset form
@@ -151,7 +155,7 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none relative">
       {/* Sub Sidebar */}
-      <div className="w-80 border-r border-gray-200 flex flex-col justify-between bg-white">
+      <div className={`${panes.list} flex-col justify-between bg-white`}>
         <div className="p-4 flex-1 flex flex-col overflow-hidden">
           {/* Search bar & Add button */}
           <div className="flex items-center gap-2 mb-3">
@@ -192,7 +196,10 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
               {displayedClients.map((client) => (
                 <div
                   key={client.id}
-                  onClick={() => setSelectedClientId(client.id)}
+                  onClick={() => {
+                    setSelectedClientId(client.id);
+                    setIsMobileDetailOpen(true);
+                  }}
                   className={`p-3 rounded-xl cursor-pointer transition ${
                     selectedClientId === client.id
                       ? 'bg-tw-blue-light text-tw-blue'
@@ -227,16 +234,19 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
       </div>
 
       {/* Main Panel Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-tw-canvas overflow-y-auto">
+      <div className={`${panes.detail} flex-1 flex-col items-center justify-start md:justify-center p-4 md:p-8 bg-tw-canvas overflow-y-auto`}>
+        <div className="w-full max-w-2xl md:hidden">
+          <MobileBackButton onClick={() => setIsMobileDetailOpen(false)} label="Rubrica" />
+        </div>
         {selectedClient ? (
-          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-6">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-8 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
               <div>
                 <h2 className="text-xl font-bold text-gray-800">{selectedClient.name}</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {selectedClient.phone || 'Nessun telefono'} • {selectedClient.email || 'Nessuna email'}
                 </p>
-                <p className="text-[10px] text-gray-400 font-mono mt-1">ID: {selectedClient.id}</p>
+                <p className="text-[10px] text-gray-400 font-mono mt-1 break-all">ID: {selectedClient.id}</p>
               </div>
               <div className="flex items-center gap-2">
                 {selectedClient.hasPrivacyConsent ? (
@@ -301,7 +311,7 @@ export const RubricaView: React.FC<RubricaViewProps> = ({ clients, onAddClient }
       {/* Modal Nuovo Cliente */}
       {isNewClientModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h3 className="font-bold text-sm text-gray-800 uppercase tracking-wider">Nuovo Cliente</h3>
               <button

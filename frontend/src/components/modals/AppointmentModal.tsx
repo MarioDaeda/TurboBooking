@@ -264,10 +264,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/40 backdrop-blur-[2px] overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150 my-auto flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-6 bg-black/40 backdrop-blur-[2px]">
+      {/* Su mobile la finestra occupa tutto lo schermo; da sm in su torna una modale centrata */}
+      <div className="relative w-full max-w-4xl bg-white sm:rounded-3xl shadow-2xl overflow-hidden sm:border border-gray-100 animate-in fade-in zoom-in-95 duration-150 flex flex-col h-full sm:h-auto sm:max-h-[94vh]">
         {/* Top Title Bar */}
-        <div className="px-6 sm:px-8 py-4 border-b border-gray-100 flex items-center justify-between bg-white z-10">
+        <div className="px-4 sm:px-8 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between bg-white z-10">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 text-tw-blue rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide">
               <Calendar className="w-4 h-4" />
@@ -291,19 +292,19 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
         {/* Error Banner if any */}
         {errorMessage && (
-          <div className="mx-6 sm:mx-8 mt-4 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+          <div className="mx-4 sm:mx-8 mt-4 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span className="font-semibold">{errorMessage}</span>
           </div>
         )}
 
         {/* Modal Form Body */}
-        <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto flex-1 min-h-0">
           {/* Client Details Card */}
-          <div className="bg-gray-50/70 rounded-2xl p-5 border border-gray-100 space-y-4">
+          <div className="bg-gray-50/70 rounded-2xl p-4 sm:p-5 border border-gray-100 space-y-4">
             <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center justify-between">
               <span>DATI CLIENTE</span>
-              <span className="text-xs text-gray-400 font-normal">Scheda anagrafica rapida</span>
+              <span className="hidden sm:inline text-xs text-gray-400 font-normal">Scheda anagrafica rapida</span>
             </div>
 
             {/* Client Name with Info & History Icons */}
@@ -415,7 +416,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             </div>
 
             {/* Quick reaction icons row */}
-            <div className="flex items-center justify-center gap-8 pt-1 text-gray-400 border-t border-gray-200/60">
+            <div className="flex items-center justify-center gap-3 sm:gap-8 pt-1 text-gray-400 border-t border-gray-200/60">
               <button
                 type="button"
                 className="hover:text-red-500 transition p-1.5 hover:scale-110"
@@ -456,14 +457,14 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
           </div>
 
           {/* Service & Booking Details Card */}
-          <div className="border border-gray-200 rounded-3xl p-5 sm:p-6 space-y-5 bg-white shadow-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <div className="border border-gray-200 rounded-3xl p-4 sm:p-6 space-y-5 bg-white shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <span className="text-sm font-bold uppercase tracking-wider text-gray-800 flex items-center gap-2">
                   <Scissors className="w-4 h-4 text-tw-blue" />
                   Trattamento Selezionato
                 </span>
-                <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-lg font-mono font-semibold">
+                <span className="hidden sm:inline text-xs text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-lg font-mono font-semibold">
                   {services.length} trattamenti disponibili
                 </span>
               </div>
@@ -478,7 +479,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
                   Trattamento Principale
                 </label>
-                <span className="text-xs text-tw-blue font-semibold">
+                <span className="hidden sm:inline text-xs text-tw-blue font-semibold">
                   Clicca per cercare o cambiare trattamento
                 </span>
               </div>
@@ -515,7 +516,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                         {currentService?.category || 'TAGLIO'}
                       </span>
                     </div>
-                    <div className="text-xs sm:text-sm text-gray-600 flex items-center gap-3 pt-1">
+                    <div className="text-xs sm:text-sm text-gray-600 flex flex-wrap items-center gap-x-3 pt-1">
                       <span>
                         Durata standard: <strong>{currentService?.duration || '00:45'}</strong> ({durationMinutes}m)
                       </span>
@@ -732,8 +733,10 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             </div>
           </div>
 
-          {/* Bottom Action Buttons Bar (without Alla Cassa) */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        </div>
+
+        {/* Bottom Action Buttons Bar: fuori dall'area scrollabile, sempre visibile (anche su mobile) */}
+          <div className="flex items-center justify-between gap-2 px-4 sm:px-8 py-3 border-t border-gray-100 bg-white">
             <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
@@ -751,7 +754,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="p-2.5 hover:bg-gray-100 text-gray-500 rounded-xl border border-gray-200 transition"
+                className="hidden sm:block p-2.5 hover:bg-gray-100 text-gray-500 rounded-xl border border-gray-200 transition"
                 title="Stampa promemoria o scheda lavoro"
               >
                 <Printer className="w-4 h-4" />
@@ -768,7 +771,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                   onSendToCassa(updated);
                   onClose();
                 }}
-                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold flex items-center gap-1.5 shadow-sm transition"
+                className="px-3 sm:px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold flex items-center gap-1.5 shadow-sm transition"
                 title="Salva e invia a cassa"
               >
                 <span>Alla Cassa</span>
@@ -777,15 +780,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="px-6 py-2.5 rounded-xl bg-tw-blue hover:bg-tw-blue-hover text-white text-sm font-bold flex items-center gap-2 shadow-sm transition disabled:opacity-50"
+                className="px-4 sm:px-6 py-2.5 rounded-xl bg-tw-blue hover:bg-tw-blue-hover text-white text-sm font-bold flex items-center gap-2 shadow-sm transition disabled:opacity-50"
                 title="Salva e conferma appuntamento"
               >
                 <Check className="w-4 h-4" />
-                <span>{isSaving ? 'Salvataggio...' : 'Salva Appuntamento'}</span>
+                <span>
+                  {isSaving ? 'Salvataggio...' : <>Salva<span className="hidden sm:inline"> Appuntamento</span></>}
+                </span>
               </button>
             </div>
           </div>
-        </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Scissors, Search, Plus, Trash2, Check, Info } from 'lucide-react';
 import { ServiceItem } from '@/types';
+import { masterDetailClasses, MobileBackButton } from '@/components/layout/MasterDetail';
 
 interface TrattamentiViewProps {
   services: ServiceItem[];
@@ -12,6 +13,8 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
   const [activeTab, setActiveTab] = useState<'trattamenti' | 'pacchetto'>('trattamenti');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
+  const panes = masterDetailClasses(isMobileDetailOpen);
 
   const effectiveSelectedId = selectedServiceId || services[0]?.id || null;
   const selectedService = services.find((s) => s.id === effectiveSelectedId) || services[0];
@@ -33,7 +36,7 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none">
       {/* Sub Sidebar */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+      <div className={`${panes.list} flex-col bg-white`}>
         <div className="flex border-b border-gray-200 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('trattamenti')}
@@ -89,7 +92,10 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
                 {items.map((srv) => (
                   <div
                     key={srv.id}
-                    onClick={() => setSelectedServiceId(srv.id)}
+                    onClick={() => {
+                      setSelectedServiceId(srv.id);
+                      setIsMobileDetailOpen(true);
+                    }}
                     className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition ${
                       selectedServiceId === srv.id
                         ? 'bg-tw-blue-light text-tw-blue font-semibold'
@@ -115,9 +121,10 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
       </div>
 
       {/* Main Treatment Details Panel */}
-      <div className="flex-1 overflow-y-auto p-8 bg-tw-canvas">
+      <div className={`${panes.detail} flex-col flex-1 overflow-y-auto p-4 md:p-8 bg-tw-canvas`}>
+        <MobileBackButton onClick={() => setIsMobileDetailOpen(false)} label="Trattamenti" className="self-start mb-2" />
         {selectedService ? (
-          <div key={selectedService.id} className="max-w-3xl mx-auto space-y-6">
+          <div key={selectedService.id} className="max-w-3xl w-full mx-auto space-y-6">
             {/* Top Bar */}
             <div className="flex items-center justify-between">
               <button
@@ -203,7 +210,7 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
                 PREZZI E DURATA
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                     PREZZO
@@ -260,7 +267,7 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
               </div>
 
               {/* Trattamento Obbligatorio Correlato */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
                 <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
                   TRATTAMENTO OBBLIGATORIO CORRELATO
                 </span>
@@ -274,7 +281,7 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
 
               {/* Toggles */}
               <div className="space-y-4 pt-2 border-t border-gray-100 text-xs font-semibold text-gray-700 uppercase">
-                <label className="flex items-center justify-between cursor-pointer">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
                   <span>IL SERVIZIO HA VARIANTI DI PREZZO O DURATA</span>
                   <input
                     type="checkbox"
@@ -282,7 +289,7 @@ export const TrattamentiView: React.FC<TrattamentiViewProps> = ({ services }) =>
                     className="w-5 h-5 text-tw-blue rounded"
                   />
                 </label>
-                <label className="flex items-center justify-between cursor-pointer">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
                   <span>IL SERVIZIO RICHIEDE UN TEMPO DI SANIFICAZIONE</span>
                   <input
                     type="checkbox"

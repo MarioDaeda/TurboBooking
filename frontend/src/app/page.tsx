@@ -37,6 +37,8 @@ import {
   DAY_NAMES,
 } from '@/lib/agendaDays';
 
+const MONTH_LABELS = ['GEN', 'FEB', 'MAR', 'APR', 'MAG', 'GIU', 'LUG', 'AGO', 'SET', 'OTT', 'NOV', 'DIC'];
+
 export default function Home() { return <StaffGate><Dashboard /></StaffGate>; }
 
 function Dashboard() {
@@ -44,7 +46,11 @@ function Dashboard() {
   const [activeVenueId, setActiveVenueId] = useState<string>(mockVenues[0].id);
   const [currentSection, setCurrentSection] = useState<SectionId>('agenda');
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'giornaliero' | 'settimanale'>('settimanale');
+  // Su smartphone la vista settimanale (7 giorni × collaboratori) è troppo stretta: si parte dal giorno singolo.
+  // Dashboard viene montata solo lato client (dopo StaffGate), quindi window è disponibile.
+  const [viewMode, setViewMode] = useState<'giornaliero' | 'settimanale'>(() =>
+    window.matchMedia('(max-width: 767px)').matches ? 'giornaliero' : 'settimanale'
+  );
 
   // Calendar anchor date and dynamic week days
   const [anchorDate, setAnchorDate] = useState<Date>(new Date());
@@ -79,15 +85,18 @@ function Dashboard() {
         return next;
       });
     } else {
-      setSelectedDay((prev) => {
-        const idx = currentWeekDays.findIndex((d) => d.key === prev);
-        const nextIdx = Math.min(
-          currentWeekDays.length - 1,
-          Math.max(0, (idx === -1 ? 0 : idx) + direction)
-        );
-        return currentWeekDays[nextIdx].key;
-      });
+      // Vista giornaliera: si può scorrere oltre i bordi della settimana corrente.
+      const idx = currentWeekDays.findIndex((d) => d.key === selectedDay);
+      const next = new Date(`${currentWeekDays[idx === -1 ? 0 : idx].isoDate}T12:00:00`);
+      next.setDate(next.getDate() + direction);
+      setAnchorDate(next);
+      setSelectedDay(getWeekDays(next)[(next.getDay() + 6) % 7].key);
     }
+  };
+
+  const handleGoToToday = () => {
+    setAnchorDate(new Date());
+    setSelectedDay(getTodayDayKey());
   };
 
   // 1. Initial Data Load (Session, Services, Staff, Clients)
@@ -515,9 +524,14 @@ function Dashboard() {
   };
 
   const weekRangeLabel = `${currentWeekDays[0]?.key || ''} → ${currentWeekDays[6]?.key || ''}`;
+  const labelDay =
+    viewMode === 'giornaliero'
+      ? currentWeekDays.find((d) => d.key === selectedDay) ?? currentWeekDays[0]
+      : currentWeekDays[0];
+  const monthLabel = MONTH_LABELS[Number(labelDay.isoDate.slice(5, 7)) - 1];
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-tw-canvas antialiased text-tw-text-main font-sans">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-tw-canvas antialiased text-tw-text-main font-sans">
       {/* 1. Left Venue Rail */}
       <VenueRail
         venues={mockVenues}
@@ -535,6 +549,7 @@ function Dashboard() {
           onOpenDayOverview={() => setIsDayOverviewOpen(true)}
           selectedStaffFilter={selectedStaffFilter}
           onSelectStaffFilter={setSelectedStaffFilter}
+          staffList={staffList}
           viewMode={viewMode}
           onToggleViewMode={() =>
             setViewMode((prev) => (prev === 'settimanale' ? 'giornaliero' : 'settimanale'))
@@ -543,8 +558,10 @@ function Dashboard() {
           selectedDay={selectedDay}
           onPrevDay={() => handleStepDay(-1)}
           onNextDay={() => handleStepDay(1)}
+          onToday={handleGoToToday}
+          onSelectSection={setCurrentSection}
           weekRangeLabel={weekRangeLabel}
-          monthLabel="SET"
+          monthLabel={monthLabel}
         />
 
         {/* Dynamic Section View */}
@@ -656,6 +673,9 @@ function Dashboard() {
         onClose={() => setIsDrawerOpen(false)}
         currentSection={currentSection}
         onSelectSection={(section) => setCurrentSection(section)}
+        venues={mockVenues}
+        activeVenueId={activeVenueId}
+        onSelectVenue={setActiveVenueId}
       />
 
       {/* 4. Modals */}

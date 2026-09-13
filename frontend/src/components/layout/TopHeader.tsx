@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { SectionId } from '@/types';
+import { SectionId, StaffMember } from '@/types';
 import {
   Calendar,
   ChevronLeft,
@@ -34,12 +34,14 @@ interface TopHeaderProps {
   onOpenDayOverview: () => void;
   selectedStaffFilter: string;
   onSelectStaffFilter: (staff: string) => void;
+  staffList?: StaffMember[];
   viewMode: 'giornaliero' | 'settimanale';
   onToggleViewMode: () => void;
   onSelectViewMode?: (mode: 'giornaliero' | 'settimanale') => void;
   selectedDay?: string;
   onPrevDay?: () => void;
   onNextDay?: () => void;
+  onToday?: () => void;
   onSelectSection?: (section: SectionId) => void;
   weekRangeLabel?: string;
   monthLabel?: string;
@@ -52,12 +54,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenDayOverview,
   selectedStaffFilter,
   onSelectStaffFilter,
+  staffList = [],
   viewMode,
   onToggleViewMode,
   onSelectViewMode,
   selectedDay = 'MER 2',
   onPrevDay,
   onNextDay,
+  onToday,
   onSelectSection,
   weekRangeLabel,
   monthLabel = 'SET',
@@ -145,19 +149,75 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   const sectionMeta = getSectionTitle();
 
+  const selectClassName =
+    'w-full appearance-none bg-white border border-gray-200 rounded-md px-3 py-2 md:py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer';
+
+  const agendaFilters = (
+    <>
+      {/* View Switcher Dropdown */}
+      <div className="relative flex-1 md:flex-none">
+        <select
+          value={viewMode}
+          onChange={(e) => {
+            const mode = e.target.value as 'giornaliero' | 'settimanale';
+            if (onSelectViewMode) {
+              onSelectViewMode(mode);
+            } else if (mode !== viewMode) {
+              onToggleViewMode();
+            }
+          }}
+          className={selectClassName}
+        >
+          <option value="settimanale">Settimanale</option>
+          <option value="giornaliero">Giornaliero</option>
+        </select>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[10px] text-gray-400">
+          ⌄
+        </span>
+      </div>
+
+      {/* Staff Filter Dropdown */}
+      <div className="relative flex-1 md:flex-none">
+        <select
+          value={selectedStaffFilter}
+          onChange={(e) => onSelectStaffFilter(e.target.value)}
+          className={selectClassName}
+        >
+          <option value="all">Tutti i collaboratori</option>
+          {staffList.map((staff) => (
+            <option key={staff.id} value={staff.id}>
+              {staff.name}
+            </option>
+          ))}
+        </select>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[10px] text-gray-400">
+          ⌄
+        </span>
+      </div>
+    </>
+  );
+
   return (
-    <header className="h-14 bg-white border-b border-tw-border flex items-center justify-between px-4 select-none z-20">
+    <header className="bg-white border-b border-tw-border flex flex-wrap md:flex-nowrap items-center justify-between gap-x-2 px-2 md:px-4 md:h-14 select-none z-20">
       {/* Left Area: Navigation or Title */}
-      <div className="flex items-center gap-3">
+      <div className="h-14 md:h-auto flex items-center gap-3 min-w-0">
         {currentSection === 'agenda' ? (
-          <div className="flex items-center gap-2">
-            <button className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition">
+          <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
+            <button
+              onClick={onToday}
+              title="Vai a oggi"
+              className="p-2 md:p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition"
+            >
               <Calendar className="w-5 h-5 text-gray-700" />
             </button>
             <span className="font-semibold text-xs text-gray-700 uppercase tracking-wide">{monthLabel}</span>
-            <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5 text-xs text-tw-blue font-semibold">
+            <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5 text-xs text-tw-blue font-semibold whitespace-nowrap">
               {viewMode === 'settimanale' ? (
-                <span>{weekRangeLabel || 'LUN 07 → DOM 13'}</span>
+                <>
+                  {/* Su mobile solo i numeri ("07 → 13") per non spingere le azioni su un'altra riga */}
+                  <span className="md:hidden">{(weekRangeLabel || 'LUN 07 → DOM 13').replace(/[A-Z]{3} /g, '')}</span>
+                  <span className="hidden md:inline">{weekRangeLabel || 'LUN 07 → DOM 13'}</span>
+                </>
               ) : (
                 <span>{selectedDay}</span>
               )}
@@ -165,14 +225,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <div className="flex items-center gap-0.5 text-gray-500">
               <button
                 onClick={onPrevDay}
-                className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
+                className="p-2 md:p-1 hover:bg-gray-100 rounded transition cursor-pointer"
                 title={viewMode === 'giornaliero' ? 'Giorno precedente' : 'Settimana precedente'}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={onNextDay}
-                className="p-1 hover:bg-gray-100 rounded transition cursor-pointer"
+                className="p-2 md:p-1 hover:bg-gray-100 rounded transition cursor-pointer"
                 title={viewMode === 'giornaliero' ? 'Giorno successivo' : 'Settimana successiva'}
               >
                 <ChevronRight className="w-4 h-4" />
@@ -180,8 +240,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </div>
           </div>
         ) : currentSection === 'orari-aperture' || currentSection === 'orari-chiusure' ? (
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-gray-700" />
+          <div className="flex items-center gap-2 min-w-0 pl-2 md:pl-0">
+            <Clock className="w-5 h-5 text-gray-700 shrink-0" />
             <button
               onClick={() => onSelectSection?.('orari')}
               className="font-bold text-xs uppercase tracking-wider text-tw-blue hover:underline cursor-pointer"
@@ -190,14 +250,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               ORARI
             </button>
             <span className="text-gray-400 text-xs font-bold">→</span>
-            <h1 className="font-bold text-xs uppercase tracking-wider text-tw-text-main">
+            <h1 className="font-bold text-xs uppercase tracking-wider text-tw-text-main truncate">
               {currentSection === 'orari-aperture' ? 'APERTURE STRAORDINARIE' : 'CHIUSURE STRAORDINARIE'}
             </h1>
           </div>
         ) : (
-          <div className="flex items-center gap-2.5">
-            {sectionMeta?.icon}
-            <h1 className="font-bold text-xs uppercase tracking-wider text-tw-text-main">
+          <div className="flex items-center gap-2.5 min-w-0 pl-2 md:pl-0">
+            <span className="shrink-0">{sectionMeta?.icon}</span>
+            <h1 className="font-bold text-xs uppercase tracking-wider text-tw-text-main truncate">
               {sectionMeta?.label}
             </h1>
           </div>
@@ -205,61 +265,23 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       </div>
 
       {/* Center Area: Digital Clock */}
-      <div className="font-mono text-base font-semibold text-gray-500 tracking-tight">
+      <div className="hidden md:block font-mono text-base font-semibold text-gray-500 tracking-tight">
         {timeStr}
       </div>
 
       {/* Right Area: Filters & Action Buttons */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 shrink-0">
         {currentSection === 'agenda' && (
-          <>
-            {/* View Switcher Dropdown */}
-            <div className="relative">
-              <select
-                value={viewMode}
-                onChange={(e) => {
-                  const mode = e.target.value as 'giornaliero' | 'settimanale';
-                  if (onSelectViewMode) {
-                    onSelectViewMode(mode);
-                  } else if (mode !== viewMode) {
-                    onToggleViewMode();
-                  }
-                }}
-                className="appearance-none bg-white border border-gray-200 rounded-md px-3 py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer"
-              >
-                <option value="settimanale">Settimanale</option>
-                <option value="giornaliero">Giornaliero</option>
-              </select>
-              <span className="absolute right-2 top-2 pointer-events-none text-[10px] text-gray-400">
-                ⌄
-              </span>
-            </div>
-
-            {/* Staff Filter Dropdown */}
-            <div className="relative">
-              <select
-                value={selectedStaffFilter}
-                onChange={(e) => onSelectStaffFilter(e.target.value)}
-                className="appearance-none bg-white border border-gray-200 rounded-md px-3 py-1.5 pr-7 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tw-blue cursor-pointer"
-              >
-                <option value="all">Tutti i collaboratori</option>
-                <option value="staff-1">Gianluca</option>
-                <option value="staff-2">Sara</option>
-              </select>
-              <span className="absolute right-2 top-2 pointer-events-none text-[10px] text-gray-400">
-                ⌄
-              </span>
-            </div>
-          </>
+          <div className="hidden md:flex items-center gap-3">{agendaFilters}</div>
         )}
 
         {/* Quick Actions Buttons */}
-        <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
+        <div className="flex items-center gap-0.5 md:gap-1 md:border-l border-gray-200 md:pl-2">
           {/* Flash Promo Button (Saetta) */}
           <button
             onClick={onOpenFlashPromo}
             title="Promo Flash"
-            className="p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
+            className="p-2.5 md:p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
           >
             <Zap className="w-4 h-4" />
           </button>
@@ -268,7 +290,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           <button
             onClick={onOpenDayOverview}
             title="Panoramica del Giorno"
-            className="p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
+            className="p-2.5 md:p-2 hover:bg-blue-50 text-gray-600 hover:text-tw-blue rounded-md transition"
           >
             <ClipboardList className="w-4 h-4" />
           </button>
@@ -276,7 +298,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           {/* Security / Compliance Shield */}
           <button
             title="Conforme GDPR & Normativa Fiscale"
-            className="p-2 hover:bg-gray-100 text-gray-500 rounded-md transition"
+            className="hidden md:inline-flex p-2 hover:bg-gray-100 text-gray-500 rounded-md transition"
           >
             <ShieldCheck className="w-4 h-4" />
           </button>
@@ -285,12 +307,17 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           <button
             onClick={onOpenDrawer}
             title="Apri Menu Principale"
-            className="p-2 hover:bg-gray-100 text-gray-700 hover:text-tw-blue rounded-md transition ml-1"
+            className="p-2.5 md:p-2 hover:bg-gray-100 text-gray-700 hover:text-tw-blue rounded-md transition md:ml-1"
           >
             <Menu className="w-5 h-5" />
           </button>
         </div>
       </div>
+
+      {/* Mobile: filtri agenda su una seconda riga a tutta larghezza */}
+      {currentSection === 'agenda' && (
+        <div className="md:hidden w-full flex items-center gap-2 pb-2">{agendaFilters}</div>
+      )}
     </header>
   );
 };

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { CreditCard, Search, Plus, CheckCircle2 } from 'lucide-react';
 import { Client, Appointment } from '@/types';
+import { masterDetailClasses, MobileBackButton } from '@/components/layout/MasterDetail';
 
 interface CassaViewProps {
   clients: Client[];
@@ -23,12 +24,15 @@ export const CassaView: React.FC<CassaViewProps> = ({
     propSelectedClientId || appointments[0]?.clientId || clients[0]?.id || null
   );
   const [checkoutSuccess, setCheckoutSuccess] = useState<string | null>(null);
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(!!propSelectedClientId);
+  const panes = masterDetailClasses(isMobileDetailOpen);
 
   // Sync prop changes
   React.useEffect(() => {
     if (propSelectedClientId) {
       setInternalSelectedClientId(propSelectedClientId);
       setCheckoutSuccess(null);
+      setIsMobileDetailOpen(true);
     }
   }, [propSelectedClientId]);
 
@@ -37,6 +41,7 @@ export const CassaView: React.FC<CassaViewProps> = ({
   const handleSelectClient = (id: string) => {
     setInternalSelectedClientId(id);
     setCheckoutSuccess(null);
+    setIsMobileDetailOpen(true);
     onSelectClient?.(id);
   };
 
@@ -71,7 +76,7 @@ export const CassaView: React.FC<CassaViewProps> = ({
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none">
       {/* Sub Sidebar */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+      <div className={`${panes.list} flex-col bg-white`}>
         {/* Tabs */}
         <div className="flex border-b border-gray-200 text-xs font-semibold">
           <button
@@ -213,7 +218,10 @@ export const CassaView: React.FC<CassaViewProps> = ({
       </div>
 
       {/* Main Panel Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-tw-canvas">
+      <div className={`${panes.detail} flex-1 flex-col items-center justify-start md:justify-center p-4 md:p-8 bg-tw-canvas overflow-y-auto`}>
+        <div className="w-full max-w-lg md:hidden">
+          <MobileBackButton onClick={() => setIsMobileDetailOpen(false)} label="Clienti in salone" />
+        </div>
         {selectedClient ? (
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-6">
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">

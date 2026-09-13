@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Clock, Plus, Sun, Moon } from 'lucide-react';
+import { masterDetailClasses, MobileBackButton } from '@/components/layout/MasterDetail';
 
 interface DaySchedule {
   day: string;
@@ -27,6 +28,8 @@ export const OrariView: React.FC<OrariViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'orari' | 'aperture' | 'chiusure'>(subSection);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(2); // Default to Mercoledì
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
+  const panes = masterDetailClasses(isMobileDetailOpen);
 
   const [localSalonHours, setLocalSalonHours] = useState<DaySchedule[]>([
     { day: 'Domenica', shortName: 'DOM', hours: 'Chiuso', isOpen: false, openTime: '08:00', closeTime: '19:00' },
@@ -96,11 +99,11 @@ export const OrariView: React.FC<OrariViewProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-white overflow-hidden select-none">
       {/* Sub-navigation bar inside Orari to switch directly without drawer */}
-      <div className="bg-gray-50 border-b border-gray-200 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2">
+      <div className="bg-gray-50 border-b border-gray-200 px-3 md:px-6 py-2.5 flex items-center justify-between gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           <button
             onClick={() => handleTabChange('orari')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition shrink-0 whitespace-nowrap ${
               activeTab === 'orari'
                 ? 'bg-tw-blue text-white shadow-xs'
                 : 'bg-white text-gray-600 hover:bg-gray-200/70 border border-gray-200'
@@ -110,7 +113,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
           </button>
           <button
             onClick={() => handleTabChange('aperture')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition shrink-0 whitespace-nowrap ${
               activeTab === 'aperture'
                 ? 'bg-tw-blue text-white shadow-xs'
                 : 'bg-white text-gray-600 hover:bg-gray-200/70 border border-gray-200'
@@ -120,7 +123,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
           </button>
           <button
             onClick={() => handleTabChange('chiusure')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition shrink-0 whitespace-nowrap ${
               activeTab === 'chiusure'
                 ? 'bg-tw-blue text-white shadow-xs'
                 : 'bg-white text-gray-600 hover:bg-gray-200/70 border border-gray-200'
@@ -130,7 +133,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
           </button>
         </div>
 
-        <span className="text-[11px] text-gray-400 font-medium">
+        <span className="hidden md:inline text-[11px] text-gray-400 font-medium">
           {activeTab === 'orari' && 'Orario settimanale ordinario'}
           {activeTab === 'aperture' && `${extraOpenings.length} aperture straordinarie programmate`}
           {activeTab === 'chiusure' && `${extraClosures.length} chiusure straordinarie impostate`}
@@ -141,7 +144,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
       {activeTab === 'orari' && (
         <div className="flex-1 flex h-full overflow-hidden">
           {/* Days List Sidebar */}
-          <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+          <div className={`${panes.list} flex-col bg-white`}>
             <div className="p-3.5 bg-gray-50/50 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
               Giorni della settimana
             </div>
@@ -151,7 +154,10 @@ export const OrariView: React.FC<OrariViewProps> = ({
                 return (
                   <div
                     key={item.day}
-                    onClick={() => setSelectedDayIndex(idx)}
+                    onClick={() => {
+                      setSelectedDayIndex(idx);
+                      setIsMobileDetailOpen(true);
+                    }}
                     className={`p-4 flex items-center justify-between cursor-pointer transition ${
                       isSelected
                         ? 'bg-blue-50/80 border-l-4 border-tw-blue'
@@ -181,7 +187,8 @@ export const OrariView: React.FC<OrariViewProps> = ({
           </div>
 
           {/* Day Detail / Editor on Right */}
-          <div className="flex-1 flex flex-col p-8 bg-tw-canvas overflow-y-auto">
+          <div className={`${panes.detail} flex-1 flex-col p-4 md:p-8 bg-tw-canvas overflow-y-auto`}>
+            <MobileBackButton onClick={() => setIsMobileDetailOpen(false)} label="Giorni" className="self-start mb-2" />
             {selectedDay ? (
               <div className="max-w-xl mx-auto w-full bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-6">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-4">
@@ -273,7 +280,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
       {/* 2. APERTURE STRAORDINARIE */}
       {activeTab === 'aperture' && (
         <div className="flex-1 flex h-full bg-white overflow-hidden">
-          <div className="w-80 border-r border-gray-200 p-4 flex flex-col bg-white">
+          <div className="w-full md:w-80 md:border-r border-gray-200 p-4 flex flex-col bg-white">
             <button
               onClick={() => {
                 const date = prompt('Inserisci data (es. 2026-12-24):', '2026-12-24');
@@ -300,7 +307,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center p-8 bg-tw-canvas">
+          <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 bg-tw-canvas">
             <div className="flex flex-col items-center justify-center text-center space-y-4">
               <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-300">
                 <Clock className="w-10 h-10" />
@@ -330,7 +337,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
       {/* 3. CHIUSURE STRAORDINARIE */}
       {activeTab === 'chiusure' && (
         <div className="flex-1 flex h-full bg-white overflow-hidden">
-          <div className="w-80 border-r border-gray-200 p-4 flex flex-col bg-white">
+          <div className="w-full md:w-80 md:border-r border-gray-200 p-4 flex flex-col bg-white">
             <button
               onClick={() => {
                 const date = prompt('Inserisci data di chiusura (es. 2026-08-16):', '2026-08-16');
@@ -357,7 +364,7 @@ export const OrariView: React.FC<OrariViewProps> = ({
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center p-8 bg-tw-canvas">
+          <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 bg-tw-canvas">
             <div className="flex flex-col items-center justify-center text-center space-y-4">
               <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-300">
                 <Clock className="w-10 h-10" />

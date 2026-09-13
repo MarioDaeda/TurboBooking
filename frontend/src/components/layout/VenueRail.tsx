@@ -15,7 +15,7 @@ export const VenueRail: React.FC<VenueRailProps> = ({
   onSelectVenue,
 }) => {
   return (
-    <aside className="w-16 bg-tw-rail flex flex-col items-center py-4 gap-3 select-none flex-shrink-0 z-30 shadow-md">
+    <aside className="hidden md:flex w-16 bg-tw-rail flex-col items-center py-4 gap-3 select-none flex-shrink-0 z-30 shadow-md">
       {venues.map((venue) => {
         const isActive = venue.id === activeVenueId;
         return (

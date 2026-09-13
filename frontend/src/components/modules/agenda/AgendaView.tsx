@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Move, Clock } from 'lucide-react';
 import { Appointment, StaffMember, DaySchedule } from '@/types';
-import { AGENDA_DAYS, getTodayIndex, AgendaDay } from '@/lib/agendaDays';
+import { AGENDA_DAYS, getTodayIndex, getTodayIsoDate, AgendaDay } from '@/lib/agendaDays';
 import { DayScheduleModal } from '@/components/modals/DayScheduleModal';
 
 interface AgendaViewProps {
@@ -73,7 +73,12 @@ const formatDurationHours = (minutes: number): string => {
   return `${h}.${m.toString().padStart(2, '0')}h`;
 };
 
-const getIsoDateForDayKey = (dayKey: string, daysList: AgendaDay[] = AGENDA_DAYS): string => {
+// Su touch lo spostamento parte solo dopo una pressione prolungata, così il trascinamento
+// del dito sopra un appuntamento continua a scorrere l'agenda.
+const LONG_PRESS_MS = 350;
+const LONG_PRESS_MOVE_TOLERANCE_PX = 8;
+
+const getIsoDateForDayKey =(dayKey: string, daysList: AgendaDay[] = AGENDA_DAYS): string => {
   const found = daysList.find((d) => d.key === dayKey);
   if (found && found.isoDate) return found.isoDate;
   return new Date().toISOString().substring(0, 10);
@@ -99,6 +104,30 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   const [selectedDayForSchedule, setSelectedDayForSchedule] = useState<AgendaDay | null>(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const justResizedRef = useRef(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchDragActiveRef = useRef(false);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchStartRef.current = null;
+  };
+
+  // Durante un drag touch blocca lo scroll nativo. Serve un listener non passivo:
+  // quelli di React su touchmove sono passivi e non possono chiamare preventDefault.
+  useEffect(() => {
+    const preventScrollWhileDragging = (e: TouchEvent) => {
+      if (touchDragActiveRef.current) e.preventDefault();
+    };
+    document.addEventListener('touchmove', preventScrollWhileDragging, { passive: false });
+    return () => {
+      document.removeEventListener('touchmove', preventScrollWhileDragging);
+      if (longPressTimerRef.current !== null) window.clearTimeout(longPressTimerRef.current);
+    };
+  }, []);
 
   const handleOpenDaySchedule = (day: AgendaDay) => {
     setSelectedDayForSchedule(day);
@@ -145,13 +174,34 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     if (e.button !== 0) return;
     if (resizingState) return;
 
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const target = e.currentTarget as HTMLElement;
+    const { clientX, clientY, pointerId } = e;
 
+    if (e.pointerType === 'touch') {
+      clearLongPress();
+      touchStartRef.current = { x: clientX, y: clientY };
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressTimerRef.current = null;
+        touchDragActiveRef.current = true;
+        try {
+          target.setPointerCapture(pointerId);
+        } catch {}
+        navigator.vibrate?.(15);
+        startDragging(app, clientX, clientY);
+      }, LONG_PRESS_MS);
+      return;
+    }
+
+    target.setPointerCapture(pointerId);
+    startDragging(app, clientX, clientY);
+  };
+
+  const startDragging = (app: Appointment, clientX: number, clientY: number) => {
     const startMinutes = toMinutes(app.startTime);
     setDraggingState({
       appId: app.id,
-      initialX: e.clientX,
-      initialY: e.clientY,
+      initialX: clientX,
+      initialY: clientY,
       hasMoved: false,
       initialStartMinutes: startMinutes,
       durationMinutes: app.durationMinutes,
@@ -165,6 +215,17 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    // Il dito si è mosso prima della pressione prolungata: è uno scroll, non uno spostamento.
+    if (longPressTimerRef.current !== null && touchStartRef.current) {
+      if (
+        Math.abs(e.clientX - touchStartRef.current.x) > LONG_PRESS_MOVE_TOLERANCE_PX ||
+        Math.abs(e.clientY - touchStartRef.current.y) > LONG_PRESS_MOVE_TOLERANCE_PX
+      ) {
+        clearLongPress();
+      }
+      return;
+    }
+
     if (resizingState) {
       const deltaY = e.clientY - resizingState.initialY;
       // 56px = 30 minutes -> rawDeltaMinutes = deltaY * (30 / 56)
@@ -264,6 +325,9 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    clearLongPress();
+    touchDragActiveRef.current = false;
+
     if (resizingState) {
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -337,7 +401,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
       return {
         ...day,
-        isToday: idx === todayIndex,
+        isToday: day.isoDate === getTodayIsoDate(),
         isOpen,
         isClosed: !isOpen,
         openTime,
@@ -366,12 +430,20 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       ? staffList
       : staffList.filter((s) => s.id === selectedStaffFilter);
 
+  // Larghezza minima di un giorno: sotto questa soglia la griglia scorre in orizzontale
+  // invece di schiacciare le colonne (vista settimanale su smartphone).
+  const staffCount = Math.max(1, filteredStaff.length);
+  const minDayWidth = days.length > 1 ? Math.max(120, staffCount * 70) : staffCount * 90;
+
   return (
     <div className="flex-1 flex flex-col h-full bg-white overflow-hidden select-none">
+      {/* Unico contenitore di scroll (verticale + orizzontale): intestazione giorni e colonna orari restano fisse */}
+      <div className="flex-1 overflow-auto relative overscroll-contain">
+      <div style={{ width: `max(100%, ${64 + days.length * minDayWidth}px)` }}>
       {/* Week Header */}
-      <div className="flex border-b border-gray-200 bg-gray-50/50 sticky top-0 z-10">
+      <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-40">
         {/* Time gutter header */}
-        <div className="w-16 border-r border-gray-200 flex-shrink-0" />
+        <div className="w-12 md:w-16 border-r border-gray-200 flex-shrink-0 sticky left-0 z-10 bg-gray-50" />
 
         {/* Days Columns Header */}
         <div
@@ -426,14 +498,14 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       </div>
 
       {/* Grid Body */}
-      <div className="flex-1 overflow-y-auto relative">
+      <div className="relative">
         <div className="flex">
           {/* Time Gutter */}
-          <div className="w-16 border-r border-gray-200 flex-shrink-0 divide-y divide-gray-100 bg-white">
+          <div className="w-12 md:w-16 border-r border-gray-200 flex-shrink-0 divide-y divide-gray-100 bg-white sticky left-0 z-30">
             {timeSlots.map((time) => (
               <div
                 key={time}
-                className="h-14 px-2 py-1 text-[11px] font-medium text-gray-500 text-right flex items-start justify-end"
+                className="h-14 px-1.5 md:px-2 py-1 text-[11px] font-medium text-gray-500 text-right flex items-start justify-end"
               >
                 {time}
               </div>
@@ -565,6 +637,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                             onPointerMove={handlePointerMove}
                             onPointerUp={handlePointerUp}
                             onPointerCancel={handlePointerUp}
+                            onContextMenu={(e) => e.preventDefault()}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (resizingState || draggingState?.hasMoved || justResizedRef.current) {
@@ -578,7 +651,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               height: `${heightPixels}px`,
                               backgroundColor: app.serviceColor || '#1B6478',
                             }}
-                            className={`group absolute inset-x-1 rounded-lg p-2 text-white text-xs shadow-md border-l-4 border-white/80 flex flex-col justify-between select-none touch-none transition-shadow ${
+                            className={`group absolute inset-x-1 rounded-lg p-2 text-white text-xs shadow-md border-l-4 border-white/80 flex flex-col justify-between select-none touch-manipulation [-webkit-touch-callout:none] transition-shadow ${
                               isBeingDragged
                                 ? 'ring-4 ring-tw-blue shadow-2xl z-50 brightness-110 scale-[1.02] cursor-grabbing opacity-95'
                                 : isBeingResized
@@ -593,7 +666,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               onPointerMove={handlePointerMove}
                               onPointerUp={handlePointerUp}
                               onPointerCancel={handlePointerUp}
-                              className="absolute top-0 inset-x-0 h-3 cursor-ns-resize z-20 group/handle flex items-start justify-center touch-none"
+                              className="absolute top-0 inset-x-0 h-3 cursor-ns-resize z-20 group/handle flex items-start justify-center touch-none [@media(pointer:coarse)]:hidden"
                               title="Trascina bordo superiore per modificare l'inizio"
                             >
                               <div className="w-8 h-1 rounded-full bg-white/40 group-hover/handle:bg-white group-active/handle:bg-white shadow-xs transition mt-0.5" />
@@ -637,7 +710,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               onPointerMove={handlePointerMove}
                               onPointerUp={handlePointerUp}
                               onPointerCancel={handlePointerUp}
-                              className="absolute bottom-0 inset-x-0 h-3 cursor-ns-resize z-20 group/handle flex items-end justify-center touch-none"
+                              className="absolute bottom-0 inset-x-0 h-3 cursor-ns-resize z-20 group/handle flex items-end justify-center touch-none [@media(pointer:coarse)]:hidden"
                               title="Trascina bordo inferiore per modificare la durata"
                             >
                               <div className="w-8 h-1 rounded-full bg-white/40 group-hover/handle:bg-white group-active/handle:bg-white shadow-xs transition mb-0.5" />
@@ -651,6 +724,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             ))}
           </div>
         </div>
+      </div>
+      </div>
       </div>
 
       {/* Day Schedule Modal (direct click on day header) */}

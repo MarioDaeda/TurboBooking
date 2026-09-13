@@ -38,7 +38,7 @@ export const MagazzinoView: React.FC<MagazzinoViewProps> = ({ subSection }) => {
   if (subSection === 'ordini') {
     return (
       <div className="flex-1 flex h-full bg-white overflow-hidden select-none">
-        <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+        <div className="w-full md:w-80 md:border-r border-gray-200 flex flex-col bg-white">
           <div className="flex border-b border-gray-200 text-xs font-semibold">
             <button
               onClick={() => setActiveTab('inviati')}
@@ -83,7 +83,7 @@ export const MagazzinoView: React.FC<MagazzinoViewProps> = ({ subSection }) => {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-tw-canvas">
+        <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 bg-tw-canvas">
           <div className="flex flex-col items-center justify-center text-center space-y-4">
             <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-300">
               <Package className="w-10 h-10" />
@@ -106,7 +106,7 @@ export const MagazzinoView: React.FC<MagazzinoViewProps> = ({ subSection }) => {
   // Scadenzario
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none">
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+      <div className="w-full md:w-80 md:border-r border-gray-200 flex flex-col bg-white">
         <div className="flex border-b border-gray-200 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('in-scadenza')}
@@ -143,7 +143,7 @@ export const MagazzinoView: React.FC<MagazzinoViewProps> = ({ subSection }) => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-tw-canvas">
+      <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 bg-tw-canvas">
         <div className="flex flex-col items-center justify-center text-center space-y-4">
           <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-300">
             <Package className="w-10 h-10" />

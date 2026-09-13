@@ -9,7 +9,7 @@ export const SpeseView: React.FC = () => {
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none">
       {/* Sub Sidebar */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+      <div className="w-full md:w-80 md:border-r border-gray-200 flex flex-col bg-white">
         <div className="p-4 flex-1 flex flex-col">
           <div className="flex items-center gap-2 mb-3">
             <div className="relative flex-1">
@@ -33,7 +33,7 @@ export const SpeseView: React.FC = () => {
       </div>
 
       {/* Main Panel Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-tw-canvas">
+      <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 bg-tw-canvas">
         <div className="flex flex-col items-center justify-center text-center space-y-4">
           <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-300">
             <CircleDollarSign className="w-10 h-10" />

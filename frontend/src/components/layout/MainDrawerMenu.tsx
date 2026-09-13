@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SectionId } from '@/types';
+import { SectionId, Venue } from '@/types';
+import { useStaffSession } from '@/components/auth/StaffGate';
 import {
   X,
+  LogOut,
   MessageSquare,
   Bell,
   Calendar,
@@ -30,6 +32,9 @@ interface MainDrawerMenuProps {
   onClose: () => void;
   currentSection: SectionId;
   onSelectSection: (section: SectionId) => void;
+  venues?: Venue[];
+  activeVenueId?: string;
+  onSelectVenue?: (venueId: string) => void;
 }
 
 export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
@@ -37,7 +42,11 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
   onClose,
   currentSection,
   onSelectSection,
+  venues = [],
+  activeVenueId,
+  onSelectVenue,
 }) => {
+  const session = useStaffSession();
   const [openSubmenus, setOpenSubmenus] = useState<{ [key: string]: boolean }>({
     magazzino: false,
     orari: false,
@@ -82,7 +91,7 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
       />
 
       {/* Drawer Panel */}
-      <div className="relative w-80 max-w-full bg-white h-full shadow-2xl flex flex-col z-50 overflow-y-auto animate-in slide-in-from-right duration-200">
+      <div className="relative w-[85vw] max-w-80 bg-white h-full shadow-2xl flex flex-col z-50 overflow-y-auto animate-in slide-in-from-right duration-200">
         {/* Top Header Icons */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-4 text-tw-blue">
@@ -102,6 +111,26 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Mobile: la barra laterale delle sedi è nascosta, la selezione sede vive qui */}
+        {venues.length > 0 && (
+          <div className="md:hidden px-6 py-3 border-b border-gray-100 flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {venues.map((venue) => (
+              <button
+                key={venue.id}
+                onClick={() => onSelectVenue?.(venue.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition ${
+                  venue.id === activeVenueId
+                    ? 'bg-tw-rail text-white'
+                    : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="truncate max-w-[12rem]">{venue.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Navigation Links */}
         <nav className="flex-1 py-3 px-3 flex flex-col gap-0.5 text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -185,19 +214,19 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
               <div className="pl-10 pr-2 py-1 flex flex-col gap-1 text-[11px] font-medium text-gray-600 lowercase capitalize">
                 <button
                   onClick={() => handleNavigate('magazzino-prodotti')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Prodotti
                 </button>
                 <button
                   onClick={() => handleNavigate('magazzino-ordini')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Ordini Inviati
                 </button>
                 <button
                   onClick={() => handleNavigate('magazzino-scadenzario')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Scadenzario
                 </button>
@@ -247,7 +276,7 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
               <div className="pl-10 pr-2 py-1 flex flex-col gap-1 text-[11px] font-medium text-gray-600">
                 <button
                   onClick={() => handleNavigate('orari')}
-                  className={`text-left py-1.5 px-2 rounded transition ${
+                  className={`text-left py-2.5 md:py-1.5 px-2 rounded transition ${
                     currentSection === 'orari'
                       ? 'bg-tw-blue-light text-tw-blue font-bold'
                       : 'hover:bg-gray-100 hover:text-tw-blue'
@@ -257,7 +286,7 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
                 </button>
                 <button
                   onClick={() => handleNavigate('orari-aperture')}
-                  className={`text-left py-1.5 px-2 rounded transition ${
+                  className={`text-left py-2.5 md:py-1.5 px-2 rounded transition ${
                     currentSection === 'orari-aperture'
                       ? 'bg-tw-blue-light text-tw-blue font-bold'
                       : 'hover:bg-gray-100 hover:text-tw-blue'
@@ -267,7 +296,7 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
                 </button>
                 <button
                   onClick={() => handleNavigate('orari-chiusure')}
-                  className={`text-left py-1.5 px-2 rounded transition ${
+                  className={`text-left py-2.5 md:py-1.5 px-2 rounded transition ${
                     currentSection === 'orari-chiusure'
                       ? 'bg-tw-blue-light text-tw-blue font-bold'
                       : 'hover:bg-gray-100 hover:text-tw-blue'
@@ -332,19 +361,19 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
               <div className="pl-10 pr-2 py-1 flex flex-col gap-1 text-[11px] font-medium text-gray-600">
                 <button
                   onClick={() => handleNavigate('fornitori')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Fornitori
                 </button>
                 <button
                   onClick={() => handleNavigate('produttori')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Produttori
                 </button>
                 <button
                   onClick={() => handleNavigate('spedizioni')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Spedizioni
                 </button>
@@ -372,43 +401,43 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
               <div className="pl-10 pr-2 py-1 flex flex-col gap-1 text-[11px] font-medium text-gray-600">
                 <button
                   onClick={() => handleNavigate('statistiche-andamento')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Analisi Andamento
                 </button>
                 <button
                   onClick={() => handleNavigate('statistiche-azienda')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Report Azienda
                 </button>
                 <button
                   onClick={() => handleNavigate('statistiche-corrispettivi')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Corrispettivi
                 </button>
                 <button
                   onClick={() => handleNavigate('statistiche-collaboratori')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Report Collaboratori
                 </button>
                 <button
                   onClick={() => handleNavigate('statistiche-clienti')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Report Clienti
                 </button>
                 <button
                   onClick={() => handleNavigate('statistiche-magazzino')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Report Magazzino
                 </button>
                 <button
                   onClick={() => handleNavigate('statistiche-inventario')}
-                  className="text-left py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
+                  className="text-left py-2.5 md:py-1.5 px-2 rounded hover:bg-gray-100 hover:text-tw-blue"
                 >
                   Inventario
                 </button>
@@ -438,6 +467,21 @@ export const MainDrawerMenu: React.FC<MainDrawerMenuProps> = ({
             <span>PROFILO</span>
           </button>
         </nav>
+
+        {session && (
+          <div className="md:hidden p-3 border-t border-gray-100">
+            <button
+              onClick={() => {
+                onClose();
+                session.logout();
+              }}
+              className="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-red-600 hover:bg-red-50 transition"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>ESCI</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

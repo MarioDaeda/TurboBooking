@@ -166,14 +166,14 @@ export const ComunicazioniView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto select-none p-8">
+    <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto select-none p-4 md:p-8">
       <div className="max-w-6xl mx-auto w-full space-y-6">
         {/* Navigation Tabs */}
-        <div className="flex items-center justify-between border-b border-gray-200 pb-3">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3">
+          <div className="flex items-center gap-4 overflow-x-auto no-scrollbar max-w-full">
             <button
               onClick={() => setActiveTab('integrations')}
-              className={`flex items-center gap-2 pb-2 px-1 text-sm font-bold tracking-wide transition border-b-2 ${
+              className={`flex items-center gap-2 pb-2 px-1 text-sm font-bold tracking-wide transition border-b-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'integrations'
                   ? 'border-tw-blue text-tw-blue'
                   : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -184,7 +184,7 @@ export const ComunicazioniView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('campaigns')}
-              className={`flex items-center gap-2 pb-2 px-1 text-sm font-bold tracking-wide transition border-b-2 ${
+              className={`flex items-center gap-2 pb-2 px-1 text-sm font-bold tracking-wide transition border-b-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'campaigns'
                   ? 'border-tw-blue text-tw-blue'
                   : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -311,14 +311,14 @@ export const ComunicazioniView: React.FC = () => {
             {/* Interactive Live Simulator */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden flex flex-col">
               <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3 bg-gray-50/50">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="font-bold text-xs uppercase tracking-wider text-gray-700">
                     Simulatore Live Receptionist AI (Meta / GHL / WhatsApp)
                   </span>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="text-gray-500 font-medium">Cliente:</span>
                     <input
@@ -356,14 +356,14 @@ export const ComunicazioniView: React.FC = () => {
               </div>
 
               {/* Chat Thread */}
-              <div className="p-6 h-80 overflow-y-auto space-y-4 bg-gray-50/30">
+              <div className="p-4 md:p-6 h-[50dvh] md:h-80 overflow-y-auto space-y-4 bg-gray-50/30">
                 {messages.map((m) => (
                   <div
                     key={m.id}
                     className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
                   >
                     <div
-                      className={`max-w-lg rounded-2xl p-4 text-xs shadow-xs ${
+                      className={`max-w-[85%] md:max-w-lg rounded-2xl p-4 text-xs shadow-xs ${
                         m.sender === 'user'
                           ? 'bg-tw-blue text-white rounded-br-none'
                           : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
@@ -459,7 +459,7 @@ export const ComunicazioniView: React.FC = () => {
         ) : (
           /* Standard Campaigns View */
           <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   PERIODO
@@ -469,8 +469,8 @@ export const ComunicazioniView: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="relative w-64">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative w-full sm:w-64">
                   <input
                     type="text"
                     placeholder="Cerca"
@@ -489,7 +489,7 @@ export const ComunicazioniView: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between text-xs font-semibold">
+              <div className="px-4 md:px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold">
                 <span className="text-gray-400 uppercase tracking-wider text-[10px]">
                   COMUNICAZIONI VIA GOHIGHLEVEL
                 </span>

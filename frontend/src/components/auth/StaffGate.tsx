@@ -1,5 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+
+const StaffSessionContext = createContext<{ logout: () => Promise<void> } | null>(null);
+export const useStaffSession = () => useContext(StaffSessionContext);
+
 export function StaffGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -9,11 +13,15 @@ export function StaffGate({ children }: { children: React.ReactNode }) {
     fetch('/api/v1/auth/session', { cache: 'no-store' }).then(r => setReady(r.ok))
       .catch(() => setError('Impossibile verificare la sessione.')).finally(() => setChecking(false));
   }, []);
-  if (checking) return <p className="p-8">Verifica accesso…</p>;
-  if (ready) return <><button className="fixed bottom-2 right-2 z-50 rounded bg-white px-3 py-2 shadow" onClick={async () => {
+  const logout = async () => {
     await fetch('/api/v1/auth/session', { method: 'DELETE' }); setReady(false);
-  }}>Esci</button>{children}</>;
-  return <main className="flex min-h-screen items-center justify-center bg-slate-50"><form className="w-full max-w-sm space-y-4 rounded-xl bg-white p-8 shadow" onSubmit={async e => {
+  };
+  if (checking) return <p className="p-8">Verifica accesso…</p>;
+  // Su mobile il pulsante flottante coprirebbe l'agenda: "Esci" è disponibile nel menu principale.
+  if (ready) return <StaffSessionContext.Provider value={{ logout }}>
+    <button className="fixed bottom-2 right-2 z-50 hidden md:block rounded bg-white px-3 py-2 shadow" onClick={logout}>Esci</button>{children}
+  </StaffSessionContext.Provider>;
+  return <main className="flex min-h-[100dvh] items-center justify-center bg-slate-50 p-4"><form className="w-full max-w-sm space-y-4 rounded-xl bg-white p-6 sm:p-8 shadow" onSubmit={async e => {
     e.preventDefault(); setBusy(true); setError('');
     const form = new FormData(e.currentTarget);
     try {

@@ -23,14 +23,14 @@ export const DayOverviewModal: React.FC<DayOverviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-[2px]">
+      <div className="relative w-full max-w-4xl bg-white sm:rounded-2xl shadow-2xl overflow-hidden sm:border border-gray-100 animate-in fade-in zoom-in-95 duration-200 flex flex-col h-full sm:h-auto sm:max-h-[92vh]">
         {/* Top Header */}
-        <div className="relative px-8 py-5 border-b border-gray-100 flex items-center justify-center">
+        <div className="relative px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-100 flex items-center justify-center shrink-0">
           <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
             PANORAMICA DEL GIORNO
           </h2>
-          <div className="absolute right-6 flex items-center gap-3 text-gray-500">
+          <div className="absolute right-3 sm:right-6 flex items-center gap-2 sm:gap-3 text-gray-500">
             <button
               onClick={() => window.print()}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition"
@@ -49,10 +49,10 @@ export const DayOverviewModal: React.FC<DayOverviewModalProps> = ({
         </div>
 
         {/* Sub-tabs Header */}
-        <div className="flex justify-center border-b border-gray-100 text-xs font-semibold">
+        <div className="flex sm:justify-center border-b border-gray-100 text-xs font-semibold overflow-x-auto no-scrollbar shrink-0">
           <button
             onClick={() => setActiveTab('incassi')}
-            className={`px-6 py-3 border-b-2 transition ${
+            className={`px-4 sm:px-6 py-3 border-b-2 transition shrink-0 whitespace-nowrap ${
               activeTab === 'incassi'
                 ? 'border-tw-blue text-tw-blue'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -62,7 +62,7 @@ export const DayOverviewModal: React.FC<DayOverviewModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('lista')}
-            className={`px-6 py-3 border-b-2 transition flex items-center gap-1.5 ${
+            className={`px-4 sm:px-6 py-3 border-b-2 transition shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'lista'
                 ? 'border-tw-blue text-tw-blue'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -75,7 +75,7 @@ export const DayOverviewModal: React.FC<DayOverviewModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('disdette')}
-            className={`px-6 py-3 border-b-2 transition flex items-center gap-1.5 ${
+            className={`px-4 sm:px-6 py-3 border-b-2 transition shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'disdette'
                 ? 'border-tw-blue text-tw-blue'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -89,8 +89,8 @@ export const DayOverviewModal: React.FC<DayOverviewModalProps> = ({
         </div>
 
         {/* Filter Bar */}
-        <div className="px-8 py-3.5 bg-gray-50/70 border-b border-gray-100 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-6">
+        <div className="px-4 sm:px-8 py-3.5 bg-gray-50/70 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <label className="flex items-center gap-2 cursor-pointer font-medium text-gray-700">
               <input
                 type="radio"
@@ -136,11 +136,11 @@ export const DayOverviewModal: React.FC<DayOverviewModalProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="p-8">
+        <div className="p-4 sm:p-8 overflow-y-auto flex-1 min-h-0">
           {activeTab === 'incassi' && (
             <div>
               {/* 4 Cards Grid */}
-              <div className="grid grid-cols-4 gap-4 divide-x divide-gray-100">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-8 md:divide-x divide-gray-100">
                 {/* 1. Prenotazioni */}
                 <div className="px-4 first:pl-0 flex flex-col justify-between h-56">
                   <div>

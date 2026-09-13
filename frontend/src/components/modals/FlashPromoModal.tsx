@@ -26,10 +26,10 @@ export const FlashPromoModal: React.FC<FlashPromoModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-[2px]">
+      <div className="relative w-full max-w-xl bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-y-auto max-h-[92dvh] border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="relative px-8 py-5 border-b border-gray-100 flex items-center justify-center">
+        <div className="relative px-4 sm:px-8 py-5 border-b border-gray-100 flex items-center justify-center">
           <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
             FLASH PROMO
           </h2>
@@ -42,7 +42,7 @@ export const FlashPromoModal: React.FC<FlashPromoModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-6">
+        <div className="p-5 sm:p-8 space-y-6">
           <p className="text-xs text-gray-600 leading-relaxed text-center max-w-md mx-auto">
             Crea delle promozioni flash così da riempire gli spazi vuoti in agenda anche
             all&apos;ultimo istante. I clienti potranno prenotare online all&apos;attivazione della
@@ -56,7 +56,7 @@ export const FlashPromoModal: React.FC<FlashPromoModalProps> = ({
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
               DURATA
             </span>
-            <div className="flex items-center justify-center gap-6 pt-1">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 pt-1">
               {['Solo per oggi', '24 ore', '48 ore', '72 ore'].map((option) => (
                 <label
                   key={option}

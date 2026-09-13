@@ -33,7 +33,7 @@ export const ProfiloView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto select-none p-8">
+    <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto select-none p-4 md:p-8">
       <div className="max-w-5xl mx-auto w-full space-y-6">
         {/* Header Salone Card */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-4">
@@ -67,7 +67,7 @@ export const ProfiloView: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-4 gap-4 text-xs pt-2 border-t border-gray-100">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs pt-2 border-t border-gray-100 [&>div]:min-w-0">
             <div>
               <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">
                 RAGIONE SOCIALE
@@ -98,7 +98,7 @@ export const ProfiloView: React.FC = () => {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex justify-center border-b border-gray-200 text-xs font-semibold">
+        <div className="flex md:justify-center border-b border-gray-200 text-xs font-semibold overflow-x-auto no-scrollbar">
           {[
             { key: 'profilo', label: 'PROFILO' },
             { key: 'fatturazione', label: 'FATTURAZIONE' },
@@ -109,7 +109,7 @@ export const ProfiloView: React.FC = () => {
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key as 'profilo' | 'fatturazione' | 'impostazioni' | 'vetrina' | 'utenti')}
-              className={`px-6 py-3 border-b-2 uppercase tracking-wider transition ${
+              className={`px-4 md:px-6 py-3 border-b-2 uppercase tracking-wider transition shrink-0 whitespace-nowrap ${
                 activeTab === t.key
                   ? 'border-tw-blue text-tw-blue font-bold'
                   : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -133,7 +133,7 @@ export const ProfiloView: React.FC = () => {
             </div>
 
             {/* Active subscription card 1: IT PREMIUM */}
-            <div className="bg-tw-blue rounded-2xl p-6 text-white shadow-md flex items-center justify-between">
+            <div className="bg-tw-blue rounded-2xl p-6 text-white shadow-md flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center font-bold text-lg">
                   tw
@@ -157,7 +157,7 @@ export const ProfiloView: React.FC = () => {
             </div>
 
             {/* Add-on 1 */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex items-center justify-between">
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-blue-50 text-tw-blue flex items-center justify-center font-bold text-xl">
                   +
@@ -181,7 +181,7 @@ export const ProfiloView: React.FC = () => {
             </div>
 
             {/* Add-on 2 */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex items-center justify-between">
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-blue-50 text-tw-blue flex items-center justify-center font-bold text-xl">
                   +
@@ -210,8 +210,8 @@ export const ProfiloView: React.FC = () => {
         {activeTab === 'fatturazione' && (
           <div className="space-y-6">
             {/* Top pending invoice banner */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden flex items-center justify-between">
-              <div className="p-6 bg-red-50/70 border-r border-red-100 flex flex-col justify-center min-w-48">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden flex flex-col md:flex-row md:items-center justify-between">
+              <div className="p-6 bg-red-50/70 border-b md:border-b-0 md:border-r border-red-100 flex flex-col justify-center min-w-48">
                 <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
                   ADDEBITI
                 </span>
@@ -232,7 +232,7 @@ export const ProfiloView: React.FC = () => {
                 <span className="text-xs font-bold text-gray-800">01 set 2026</span>
               </div>
 
-              <div className="p-6 flex items-center gap-3">
+              <div className="p-6 flex flex-wrap items-center justify-center gap-3">
                 <button
                   onClick={() => alert('Download fattura')}
                   className="px-4 py-2 border border-tw-blue text-tw-blue hover:bg-blue-50 text-xs font-bold uppercase rounded-xl transition"
@@ -341,7 +341,7 @@ export const ProfiloView: React.FC = () => {
               <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 PROMEMORIA APPUNTAMENTO AL CLIENTE
               </div>
-              <div className="grid grid-cols-3 gap-4 text-xs font-medium text-gray-700">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-xs font-medium text-gray-700">
                 <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <span>INVIA PUSH DI NOTIFICA</span>
                   <input type="checkbox" defaultChecked className="w-5 h-5 text-tw-blue rounded" />
@@ -391,7 +391,7 @@ export const ProfiloView: React.FC = () => {
               <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 CANALI SOCIAL
               </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl max-w-md mx-auto">
+              <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gray-50 rounded-xl max-w-md mx-auto">
                 <div className="flex items-center gap-3">
                   <FacebookIcon />
                   <InstagramIcon />
@@ -418,7 +418,8 @@ export const ProfiloView: React.FC = () => {
                   UTENTI ATTIVI
                 </span>
               </div>
-              <table className="w-full text-xs text-left">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-xs text-left">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                     <th className="py-4 px-6">NOME</th>
@@ -462,6 +463,7 @@ export const ProfiloView: React.FC = () => {
                   </tr>
                 </tbody>
               </table>
+              </div>
 
               <div className="p-4 text-center border-t border-gray-100">
                 <button

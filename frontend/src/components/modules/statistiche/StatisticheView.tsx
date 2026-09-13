@@ -18,11 +18,11 @@ interface StatisticheViewProps {
 export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) => {
   if (subSection === 'corrispettivi') {
     return (
-      <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto p-8 select-none">
+      <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto p-4 md:p-8 select-none">
         <div className="max-w-6xl mx-auto w-full space-y-6">
           {/* Top Filter Bar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   PERIODO
@@ -38,7 +38,7 @@ export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) 
               </button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   SETTORE
@@ -58,8 +58,8 @@ export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) 
           </div>
 
           {/* Table Container */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
-            <table className="w-full text-xs text-left border-collapse">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-x-auto">
+            <table className="w-full min-w-[720px] text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   <th className="py-4 px-4 font-bold">GG</th>
@@ -100,10 +100,10 @@ export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) 
 
   // Default: Analisi Andamento
   return (
-    <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto p-8 select-none">
+    <div className="flex-1 flex flex-col h-full bg-tw-canvas overflow-y-auto p-4 md:p-8 select-none">
       <div className="max-w-6xl mx-auto w-full space-y-6">
         {/* Filter bar */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
               PERIODO
@@ -124,7 +124,7 @@ export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) 
         </div>
 
         {/* Top 4 Cards Row */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {[
             { label: 'RICAVI TOTALI', val: '€ 2.390', spark: 'w-full h-8 bg-blue-50/50 rounded' },
             { label: 'SERVIZI', val: '€ 2.170', spark: 'w-full h-8 bg-blue-50/50 rounded' },
@@ -156,7 +156,7 @@ export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) 
         </div>
 
         {/* Middle Stats Row */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs grid grid-cols-4 divide-x divide-gray-100">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 md:p-6 shadow-xs grid grid-cols-2 md:grid-cols-4 gap-y-4 md:divide-x divide-gray-100">
           <div className="pr-4 space-y-1">
             <span className="text-[10px] font-bold text-gray-400 uppercase">FICHE MEDIA</span>
             <div className="text-xl font-bold text-gray-800">€ 47,80</div>
@@ -176,9 +176,9 @@ export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) 
         </div>
 
         {/* Charts Row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs font-bold text-gray-700 uppercase">PRESENZE</span>
               <div className="flex items-center gap-4 text-[10px] text-gray-500 font-semibold">
                 <span className="flex items-center gap-1">
@@ -200,7 +200,7 @@ export const StatisticheView: React.FC<StatisticheViewProps> = ({ subSection }) 
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs font-bold text-gray-700 uppercase">FATTURATO</span>
               <div className="flex items-center gap-4 text-[10px] text-gray-500 font-semibold">
                 <span className="flex items-center gap-1">

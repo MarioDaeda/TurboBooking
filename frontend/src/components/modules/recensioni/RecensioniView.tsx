@@ -3,18 +3,21 @@
 import React, { useState } from 'react';
 import { Search, Info } from 'lucide-react';
 import { mockReviews } from '@/data/mockData';
+import { masterDetailClasses, MobileBackButton } from '@/components/layout/MasterDetail';
 
 export const RecensioniView: React.FC = () => {
   const [selectedReviewId, setSelectedReviewId] = useState<string>('rev-1');
   const [searchQuery, setSearchQuery] = useState('');
   const [replyText, setReplyText] = useState('');
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
+  const panes = masterDetailClasses(isMobileDetailOpen);
 
   const currentReview = mockReviews.find((r) => r.id === selectedReviewId) || mockReviews[0];
 
   return (
     <div className="flex-1 flex h-full bg-white overflow-hidden select-none">
       {/* Sub Sidebar */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+      <div className={`${panes.list} flex-col bg-white`}>
         <div className="p-4 border-b border-gray-100">
           <div className="relative">
             <input
@@ -37,7 +40,10 @@ export const RecensioniView: React.FC = () => {
             {mockReviews.slice(0, 2).map((rev) => (
               <div
                 key={rev.id}
-                onClick={() => setSelectedReviewId(rev.id)}
+                onClick={() => {
+                  setSelectedReviewId(rev.id);
+                  setIsMobileDetailOpen(true);
+                }}
                 className={`p-3 rounded-xl cursor-pointer transition flex items-center justify-between ${
                   selectedReviewId === rev.id
                     ? 'bg-tw-blue-light text-tw-blue'
@@ -57,7 +63,10 @@ export const RecensioniView: React.FC = () => {
             {mockReviews.slice(2, 4).map((rev) => (
               <div
                 key={rev.id}
-                onClick={() => setSelectedReviewId(rev.id)}
+                onClick={() => {
+                  setSelectedReviewId(rev.id);
+                  setIsMobileDetailOpen(true);
+                }}
                 className={`p-3 rounded-xl cursor-pointer transition flex items-center justify-between ${
                   selectedReviewId === rev.id
                     ? 'bg-tw-blue-light text-tw-blue'
@@ -73,7 +82,10 @@ export const RecensioniView: React.FC = () => {
       </div>
 
       {/* Main Review Details Panel */}
-      <div className="flex-1 overflow-y-auto p-8 bg-tw-canvas flex flex-col items-center justify-center">
+      <div className={`${panes.detail} flex-1 overflow-y-auto p-4 md:p-8 bg-tw-canvas flex-col items-center justify-start md:justify-center`}>
+        <div className="w-full max-w-2xl md:hidden">
+          <MobileBackButton onClick={() => setIsMobileDetailOpen(false)} label="Recensioni" />
+        </div>
         {currentReview && (
           <div className="max-w-2xl w-full space-y-4">
             <div className="text-center space-y-1">
@@ -86,9 +98,9 @@ export const RecensioniView: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden grid grid-cols-3 divide-x divide-gray-100">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden grid grid-cols-1 md:grid-cols-3 md:divide-x divide-gray-100">
               {/* Left 2 Cols: Review Text & Reply Box */}
-              <div className="col-span-2 p-6 space-y-4 flex flex-col justify-between">
+              <div className="md:col-span-2 p-5 md:p-6 space-y-4 flex flex-col justify-between">
                 <div className="space-y-3">
                   <div className="flex text-amber-400 text-base">★★★★★</div>
                   <p className="text-sm font-semibold text-gray-800 leading-relaxed">
@@ -125,7 +137,7 @@ export const RecensioniView: React.FC = () => {
               </div>
 
               {/* Right Col: Rating Details */}
-              <div className="p-6 space-y-4 text-xs text-gray-600 bg-gray-50/40">
+              <div className="p-5 md:p-6 space-y-4 text-xs text-gray-600 bg-gray-50/40 border-t md:border-t-0 border-gray-100">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                     Collaboratore

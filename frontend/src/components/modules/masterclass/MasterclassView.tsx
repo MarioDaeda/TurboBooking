@@ -14,15 +14,15 @@ export const MasterclassView: React.FC = () => {
   ];
 
   return (
-    <div className="flex-1 h-full bg-tw-canvas overflow-y-auto p-8 select-none">
+    <div className="flex-1 h-full bg-tw-canvas overflow-y-auto p-4 md:p-8 select-none">
       <div className="max-w-6xl mx-auto space-y-10">
         {/* Hero Section Banner */}
-        <div className="bg-white rounded-3xl p-10 border border-gray-200/80 shadow-xs flex items-center justify-between gap-10">
+        <div className="bg-white rounded-3xl p-6 md:p-10 border border-gray-200/80 shadow-xs flex flex-col-reverse md:flex-row items-center justify-between gap-6 md:gap-10">
           <div className="max-w-xl space-y-4">
             <span className="text-[10px] font-extrabold uppercase tracking-widest text-tw-blue">
               NOVITÀ · INCLUSO CON TURBOBOOKING
             </span>
-            <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
+            <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 leading-tight">
               Fai crescere le tue competenze, fai crescere il tuo salone.
             </h2>
             <p className="text-xs text-gray-500 leading-relaxed">
@@ -39,7 +39,7 @@ export const MasterclassView: React.FC = () => {
             </div>
           </div>
 
-          <div className="w-96 h-60 rounded-2xl overflow-hidden shadow-md flex-shrink-0 relative">
+          <div className="w-full md:w-96 h-48 md:h-60 rounded-2xl overflow-hidden shadow-md flex-shrink-0 relative">
             <img
               src="https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80"
               alt="Masterclass Banner"
@@ -60,7 +60,7 @@ export const MasterclassView: React.FC = () => {
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             {mockMasterclasses.map((course) => (
               <div
                 key={course.id}
@@ -114,7 +114,7 @@ export const MasterclassView: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
             {categories.map((cat) => (
               <div
                 key={cat.name}
