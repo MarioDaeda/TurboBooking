@@ -5,11 +5,11 @@ import { romeLocalToUtc } from './romeTime';
 export function bookingSaveRequest(app: Appointment, previous: Appointment | undefined, idempotencyKey: string) {
   const startAt = romeLocalToUtc(app.date!, app.startTime).toISOString();
   if (previous) {
+    // Nome, telefono ed email si aggiornano sulla scheda cliente, non sulla prenotazione.
     if (app.clientId !== previous.clientId || app.serviceId !== previous.serviceId ||
-        (app.notes || '') !== (previous.notes || '') || app.clientName !== previous.clientName ||
-        app.clientPhone !== previous.clientPhone || app.clientEmail !== previous.clientEmail ||
+        (app.notes || '') !== (previous.notes || '') ||
         app.hasPrivacyConsent !== previous.hasPrivacyConsent) {
-      throw new Error('Da questa finestra puoi modificare operatore e durata. Le modifiche a cliente, servizio, contatti e note non sono ancora supportate.');
+      throw new Error('Da questa finestra puoi modificare operatore, durata e dati di contatto del cliente. Le modifiche a servizio, note e consenso privacy non sono ancora supportate.');
     }
     return {
       url: `/api/v1/bookings/${previous.id}`,

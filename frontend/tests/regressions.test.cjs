@@ -53,8 +53,11 @@ test('saving an existing booking updates it and never creates a duplicate', () =
   assert.equal(update.body.endAt,undefined);
   const duration=bookingSaveRequest({...app,durationMinutes:45},app,'key');
   assert.equal(Date.parse(duration.body.endAt)-Date.parse(duration.body.startAt),45*60000);
-  for(const change of [{clientId:'other'},{serviceId:'other'},{notes:'new'},{clientName:'other'},{clientPhone:'other'}]) {
+  for(const change of [{clientId:'other'},{serviceId:'other'},{notes:'new'}]) {
     assert.throws(()=>bookingSaveRequest({...app,...change},app,'key'),/non sono ancora supportate/);
+  }
+  for(const change of [{clientName:'other'},{clientPhone:'other'},{clientEmail:'a@b.it'}]) {
+    assert.equal(bookingSaveRequest({...app,...change},app,'key').method,'PATCH');
   }
   assert.throws(()=>bookingSaveRequest(app,undefined,'key'),/non più presente/);
   const create=bookingSaveRequest({...app,id:'app-123'},undefined,'stable-key');

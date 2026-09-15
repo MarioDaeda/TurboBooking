@@ -385,6 +385,19 @@ function Dashboard() {
       throw new Error(errMsg);
     }
 
+    // Allinea l'elenco clienti caricato all'avvio: il cliente può essere nuovo o avere contatti modificati.
+    setClients((prev) => {
+      const entry = {
+        id: app.clientId,
+        name: app.clientName.trim() || 'Cliente',
+        phone: app.clientPhone,
+        email: app.clientEmail,
+        hasPrivacyConsent: app.hasPrivacyConsent,
+      };
+      return prev.some((c) => c.id === app.clientId)
+        ? prev.map((c) => (c.id === app.clientId ? { ...c, ...entry } : c))
+        : [...prev, { ...entry, totalVisits: 0, lastVisit: undefined }];
+    });
     await refreshBookings();
   };
 

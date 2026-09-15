@@ -193,6 +193,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     };
   };
 
+  const isExistingBooking =
+    !!appointment && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appointment.id);
+
   const handleSave = async () => {
     setIsSaving(true);
     setErrorMessage(null);
@@ -202,6 +205,29 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       if (appointment && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appointment.id)
           && resolvedId !== appointment.clientId) {
         throw new Error('Il cliente di un appuntamento esistente non può essere sostituito da questa finestra.');
+      }
+
+      if (appointment && isExistingBooking && (
+        clientName.trim() !== appointment.clientName ||
+        clientPhone.trim() !== appointment.clientPhone ||
+        clientEmail.trim() !== appointment.clientEmail
+      )) {
+        if (!clientName.trim()) throw new Error('Il nome del cliente non può essere vuoto.');
+        const parts = clientName.trim().split(/\s+/);
+        const res = await fetch(`/api/v1/customers/${resolvedId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: parts[0],
+            lastName: parts.slice(1).join(' ') || null,
+            phone: clientPhone.trim() || null,
+            email: clientEmail.trim() || null,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Errore durante l'aggiornamento dei dati del cliente.");
+        }
       }
 
       // Se il cliente non ha ancora un ID UUID valido:
@@ -313,9 +339,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 <input
                   type="text"
                   value={clientName}
-                  onFocus={() => setShowClientSuggestions(true)}
+                  onFocus={() => setShowClientSuggestions(!isExistingBooking)}
                   onChange={(e) => {
                     setClientName(e.target.value);
+                    // Su un appuntamento esistente si corregge la scheda dello stesso cliente.
+                    if (isExistingBooking) return;
                     setClientId('');
                     setHasPrivacyConsent(false);
                     setShowClientSuggestions(true);

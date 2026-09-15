@@ -354,6 +354,19 @@ async function handle(method: string, url: URL, init?: RequestInit): Promise<Res
       return json({ success: true, customer: row }, 201);
     }
   }
+  const customerMatch = path.match(/^\/api\/v1\/customers\/([^/]+)$/);
+  if (customerMatch && method === 'PATCH') {
+    const row = customers.find((c) => c.id === customerMatch[1]);
+    if (!row) return json({ error: 'Cliente non trovato.' }, 404);
+    const body = await readBody(init);
+    if (typeof body.firstName !== 'string' || !body.firstName.trim()) throw badRequest();
+    const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    row.first_name = body.firstName.trim();
+    row.last_name = str(body.lastName);
+    row.phone = str(body.phone);
+    row.email = str(body.email);
+    return json({ success: true, customer: row });
+  }
   if (path === '/api/v1/bookings') {
     if (method === 'GET') {
       const startAt = url.searchParams.get('startAt');

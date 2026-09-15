@@ -308,6 +308,31 @@ export const CustomerRepository = {
     return null;
   },
 
+  async update(
+    id: string,
+    fields: { firstName: string; lastName: string | null; phone: string | null; email: string | null },
+  ): Promise<CustomerRow | null> {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from('customers')
+      .update({
+        first_name: fields.firstName,
+        last_name: fields.lastName,
+        phone: fields.phone,
+        email: fields.email,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      throw Object.assign(new Error(`Errore aggiornamento cliente: ${error.message}`), { code: error.code });
+    }
+
+    return data ? ({ ...data, phone_e164: data.phone || undefined } as CustomerRow) : null;
+  },
+
   /**
    * Crea un nuovo cliente (telefono può essere null o già presente)
    */
